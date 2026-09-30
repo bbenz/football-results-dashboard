@@ -17,8 +17,13 @@
     down          Stop Docker Compose and delete any local token file.
     logs          Show the last Compose log lines.
     test          Run the no-data guard, ruff, mypy, and the tests.
+    pytest        Run only the named tests, for example: demo pytest tests/test_q3_trends.py
     guard         Run the no-data guard on the index and the full history.
     install-hook  Optional: install a git pre-commit hook that runs the no-data guard.
+
+  Model commands (need a Foundry project; see docs/METHODS.md)
+    eval          Run the evaluation suite against the model deployments.
+    capture       Save labeled narratives of the prepared questions for the offline fallback.
 
   Azure commands (not run by local setup)
     azure-foundation, azure-platform, upload-data, build-push, aks-deploy, aca-deploy,
@@ -52,6 +57,8 @@ switch ($Command) {
     'download' { Invoke-Cli download-data @Rest }
     'verify' { Invoke-Cli verify-data @Rest }
     'ingest' { Invoke-Cli ingest @Rest }
+    'eval' { Invoke-Cli eval @Rest }
+    'capture' { Invoke-Cli capture-narratives @Rest }
     'up' {
         $files = @()
         if ($FromRegistry) {
@@ -94,6 +101,11 @@ switch ($Command) {
             Invoke-Checked $script:Python -m mypy
             Invoke-Checked $script:Python -m pytest -q @Rest
         } finally { Pop-Location }
+    }
+    'pytest' {
+        # Only the named tests, without lint and type checks: for a quick check on stage.
+        Push-Location (Join-Path $script:Root 'demo')
+        try { Invoke-Checked $script:Python -m pytest -q @Rest } finally { Pop-Location }
     }
     'guard' {
         Invoke-Checked $script:Python (Join-Path $script:Root 'demo/scripts/check_no_data.py')

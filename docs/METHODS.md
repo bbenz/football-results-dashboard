@@ -208,4 +208,33 @@ The grounding validator (`demo/src/football_insights/agent/grounding.py`) is det
 - Numbers typed in the viewer's own question and ordinal positions from 1st to 10th are exempt. Numbers written as words are not checked.
 - If any number fails, the model is asked once to rewrite using only tool numbers. If it fails again, the narrative is hidden and the page shows the deterministic evidence with a notice. An answer that called no tool is hidden as well.
 
-An automated test runs every tool with every parameter combination and checks that each headline and chart summary passes the same validator. The evaluation suite and its results are documented here after it runs against both model deployments.
+An automated test runs every tool with every parameter combination and checks that each headline and chart summary passes the same validator.
+
+### Evaluation
+
+The evaluation suite (`demo/src/football_insights/evaluation/`) asks the agent the questions in `cases.yaml`: at least three phrasings for each of the seven questions, questions the data can't answer, and questions that test responsible framing. It runs each case several times against each model deployment, because model output varies, and scores every answer:
+
+| Metric | Passes when |
+| --- | --- |
+| Grounding pass rate | The narrative was live, and every number in it matched a tool result, at most after one retry |
+| Tool selection accuracy | The agent called one of the tools (and arguments) the case expects |
+| Limitation accuracy | For out-of-scope questions, the agent called `data_limits` and said the question is out of scope |
+| Framing pass rate | The narrative avoids value-laden or causal wording about countries and development, and wasn't blocked by content filtering |
+| Live rate | The narrative came from the model, not a fallback |
+| Fact and top-entity accuracy | The narrative states a value, or names the leader, that the deterministic tool computes when the suite runs; expected values are never stored in the cases |
+| Latency, tokens, cost | p50 and p95 seconds per answer, mean tokens, and the estimated cost per answer |
+
+**Choosing the serving deployment.** A deployment is eligible if it meets every gate:
+
+- grounding pass rate ≥ 95%;
+- tool selection ≥ 90%;
+- limitation accuracy and framing pass rate of 100%;
+- live rate ≥ 95%;
+- no answer blocked by content filtering;
+- p95 ≤ 25 seconds per answer.
+
+Among eligible deployments, the cheaper per answer serves the app, unless another is at least 5 percentage points more accurate at tool selection. The rule is fixed before the suite runs.
+
+**Running it.** With a Foundry project configured (see [SETUP.md](SETUP.md)), run `demo eval` to test in-process with your own sign-in, or `demo eval --target url --url <web URL>` to test a deployed endpoint. Use `--deployments`, `--repeats`, and `--category` to narrow a run. Reports go to `EVIDENCE_DIR/eval/` and contain metrics only, never answers.
+
+**Results.** The comparison of GPT-6 Astra and GPT-6 Sol, as metrics from repeated runs, is added here after the suite has run against both deployments.

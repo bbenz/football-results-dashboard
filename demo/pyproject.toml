@@ -70,8 +70,9 @@ ignore = ["S101", "S311", "RUF001", "RUF002", "RUF003"]
 "src/football_insights/data/verify.py" = ["S608"]
 "src/football_insights/store.py" = ["S608"]
 "src/football_insights/analytics/*.py" = ["S608"]
-# The guard shells out to git by design.
+# The guard and the link check shell out to git by design, with fixed arguments.
 "scripts/check_no_data.py" = ["S603", "S607"]
+"scripts/check_links.py" = ["S603", "S607"]
 
 [tool.mypy]
 python_version = "3.12"

@@ -49,6 +49,39 @@ Methods, coverage, and caveats for every question: [docs/METHODS.md](docs/METHOD
 
 Details: [docs/SETUP.md](docs/SETUP.md).
 
+## Deploy to AKS and ACA
+
+The same images deploy to Azure Kubernetes Service and to Azure Container Apps with Bicep and the Azure CLI. Everything authenticates with Microsoft Entra ID; there are no keys. Fill in your names in `.env`, then run the steps in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md):
+
+```powershell
+./demo/scripts/demo.ps1 azure-foundation   # Foundry with both model deployments, monitoring, a budget
+./demo/scripts/demo.ps1 azure-platform     # registry, private storage, per-service identities
+./demo/scripts/demo.ps1 upload-data
+./demo/scripts/demo.ps1 build-push
+./demo/scripts/demo.ps1 aks-deploy         # and/or aca-deploy
+./demo/scripts/demo.ps1 smoke
+```
+
+Which platform should you choose? [docs/AKS-VS-ACA.md](docs/AKS-VS-ACA.md) compares them, and `demo teardown` removes everything when you're done.
+
+## Documentation
+
+| Document | What's in it |
+| --- | --- |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Components, request and data flows, identity, telemetry |
+| [docs/METHODS.md](docs/METHODS.md) | Definitions, methods, coverage, and caveats for every question; grounding and evaluation |
+| [docs/SETUP.md](docs/SETUP.md) | Run it on your machine |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Deploy to AKS and ACA, operate, and tear down |
+| [docs/AKS-VS-ACA.md](docs/AKS-VS-ACA.md) | The side-by-side comparison and a guide to choosing |
+| [docs/HACKATHON-GUIDE.md](docs/HACKATHON-GUIDE.md) | Add a question, bring your own data, swap the model, ideas |
+| [docs/RUNBOOK.md](docs/RUNBOOK.md) and [docs/ONSTAGE-SCRIPT.md](docs/ONSTAGE-SCRIPT.md) | How the livestream demo runs, minute by minute |
+| [docs/APPENDIX.md](docs/APPENDIX.md) | Design choices, common questions, and dated sources |
+| [data/README.md](data/README.md) | Download and verify the data |
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), and [SECURITY.md](SECURITY.md). The code is released under the [MIT License](LICENSE).
+
 ## Data attribution
 
 - **International football results from 1872 to 2026** by Mart Jürisoo, on [Kaggle](https://www.kaggle.com/datasets/martj42/international-football-results-from-1872-to-2017), CC0: Public Domain.

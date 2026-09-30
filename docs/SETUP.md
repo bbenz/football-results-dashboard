@@ -47,22 +47,40 @@ demo up
 
 This builds three images (`web`, `insights`, `ingest`), runs `ingest` once against a read-only mount of `data/`, starts `insights` (internal only) and `web`, and waits until the app is ready at <http://127.0.0.1:8080>. The environment badge shows `Local`, the short image digests, the curated data version, and `AI narrative: off`.
 
+Every insight card works without a model. Each card's **View** selector shows the other views of its question, including the development-lens views that use World Bank data. Without a model, the question box still shows the evidence and says that the AI narrative is off.
+
 - `demo logs` shows the latest log lines (structured JSON).
 - `demo down` stops everything.
 - Only `web` publishes a port, and only on `127.0.0.1`.
 - The curated store lives in a Docker volume; the raw data is never copied into an image.
 
-## 4. Build the curated store without Docker (optional)
+## 4. Use the live models (optional, needs Azure)
+
+The question box needs a Microsoft Foundry project with the model deployments. [DEPLOYMENT.md](DEPLOYMENT.md) creates one with `demo azure-foundation`, which also gives your own account the Foundry User role on it. Then:
+
+```powershell
+az login
+./demo/scripts/demo.ps1 up -LiveModel
+```
+
+```bash
+az login
+./demo/scripts/demo.sh up --live-model
+```
+
+Set `FOUNDRY_PROJECT_ENDPOINT` in `.env` first (`demo azure-foundation` prints it). Containers can't use your Azure CLI sign-in, so `-LiveModel` writes a short-lived access token from your sign-in to `.local/secrets/tokens.json` (ignored by git) and refreshes it every 15 minutes in the background. No key is involved anywhere. `demo down` stops the refresh and deletes the file.
+
+## 5. Build the curated store without Docker (optional)
 
 ```text
 demo ingest
 ```
 
-`ingest` verifies the raw files, then writes a versioned curated store to `.local/curated/` (ignored by git): Parquet tables, a manifest with checksums, and a data-quality report. Running it again on the same inputs reuses the same version with identical checksums.
+`ingest` verifies the raw files, then writes a versioned curated store to `.local/curated/` (ignored by git): Parquet tables, a manifest with checksums, and a data-quality report. Running it again on the same inputs reuses the same version with identical checksums, on any operating system.
 
-To run the services on your machine instead of in containers, open two terminals and run `python -m football_insights.insights` and `python -m football_insights.web` with `PYTHONPATH=demo/src`, from the repository root, using the Python in `.venv`.
+To run the services on your machine instead of in containers, open two terminals and run `python -m football_insights.insights` and `python -m football_insights.web` with `PYTHONPATH=demo/src`, from the repository root, using the Python in `.venv`. Code running on your machine uses your Azure CLI sign-in for the models when `FOUNDRY_PROJECT_ENDPOINT` is set.
 
-## 5. Tests and checks
+## 6. Tests and checks
 
 ```text
 demo test
@@ -70,7 +88,9 @@ demo test
 
 This runs the no-data guard, `ruff`, `mypy`, and `pytest`. Unit tests use small synthetic fixtures with fictional teams. Tests marked `realdata` also run when the downloaded data is present and are skipped otherwise.
 
-`demo guard` checks the index and the full git history for data files.
+- `demo pytest tests/test_q3_trends.py` runs only the named tests, without the other checks.
+- `demo guard` checks the index and the full git history for data files.
+- `demo install-hook` adds a git pre-commit hook that runs the guard before every commit.
 
 ## Traces on your machine
 

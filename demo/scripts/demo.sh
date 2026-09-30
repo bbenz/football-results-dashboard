@@ -13,8 +13,13 @@
 #   down          Stop Docker Compose and delete any local token file.
 #   logs          Show the last Compose log lines.
 #   test          Run the no-data guard, ruff, mypy, and the tests.
+#   pytest        Run only the named tests, for example: demo pytest tests/test_q3_trends.py
 #   guard         Run the no-data guard on the index and the full history.
 #   install-hook  Optional: install a git pre-commit hook that runs the no-data guard.
+#
+# Model commands (need a Foundry project; see docs/METHODS.md)
+#   eval          Run the evaluation suite against the model deployments.
+#   capture       Save labeled narratives of the prepared questions for the offline fallback.
 #
 # Azure commands (not run by local setup)
 #   azure-foundation, azure-platform, upload-data, build-push, aks-deploy, aca-deploy,
@@ -37,6 +42,8 @@ case "$command" in
   download) run_cli download-data "$@" ;;
   verify) run_cli verify-data "$@" ;;
   ingest) run_cli ingest "$@" ;;
+  eval) run_cli eval "$@" ;;
+  capture) run_cli capture-narratives "$@" ;;
   up)
     from_registry=0
     live_model=0
@@ -85,6 +92,10 @@ case "$command" in
     "$PYTHON" "$ROOT/demo/scripts/check_no_data.py"
     (cd "$ROOT/demo" && "$PYTHON" -m ruff check src tests scripts && "$PYTHON" -m mypy && "$PYTHON" -m pytest -q "$@")
     ;;
+  pytest)
+    # Only the named tests, without lint and type checks: for a quick check on stage.
+    (cd "$ROOT/demo" && "$PYTHON" -m pytest -q "$@")
+    ;;
   guard)
     "$PYTHON" "$ROOT/demo/scripts/check_no_data.py"
     "$PYTHON" "$ROOT/demo/scripts/check_no_data.py" --history
@@ -130,5 +141,5 @@ HOOK
   allow-ip) allow_ip ;;
   switch-model) switch_model "${1:-}" ;;
   teardown) teardown "${1:-}" ;;
-  *) sed -n '2,24p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
+  *) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print } /^set -euo/ { exit }' "${BASH_SOURCE[0]}" ;;
 esac
