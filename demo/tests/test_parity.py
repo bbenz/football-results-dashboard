@@ -12,6 +12,7 @@ import httpx
 import pytest
 
 from football_insights import parity
+from football_insights.cards import CARDS
 from football_insights.config import get_settings
 
 
@@ -41,7 +42,7 @@ def web_app(monkeypatch, curated_store):  # type: ignore[no-untyped-def]
 
 def test_identical_deployments_are_identical(web_app) -> None:  # type: ignore[no-untyped-def]
     payload = cards_payload(web_app)
-    assert len(payload["cards"]) == 7 and len(payload["dataset_versions"]) == 1
+    assert len(payload["cards"]) == len(CARDS) and len(payload["dataset_versions"]) == 1
     report = parity.compare({"https://aks.example": payload, "https://aca.example": copy.deepcopy(payload)})
     assert report.identical
     assert report.digests["https://aks.example"] == report.digests["https://aca.example"]
