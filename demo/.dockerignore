@@ -1,0 +1,8 @@
+# The build context is demo/. Send only what the images need: source and locks.
+*
+!src/
+!requirements-web.lock
+!requirements-insights.lock
+!requirements-ingest.lock
+**/__pycache__
+**/*.pyc

@@ -1,0 +1,3 @@
+Column,Dtype,Description
+Country Name,object,Synthetic fixture column.
+Country Code,object,Synthetic fixture column.

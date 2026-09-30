@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Data quality{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>Data quality report</h2>
+  {% if not dq %}
+  <p class="notice">The insights service has no curated data loaded yet ({{ error }}). Run the ingest job.</p>
+  {% else %}
+  <p class="headline">Curated version <code>{{ version }}</code>, built from {% for key, d in dq.dataset_versions.items() %}{{ d.title }} ({{ d.version_label }}){% if not loop.last %} and {% endif %}{% endfor %}.</p>
+  {% if dq.warnings %}<p class="notice">Warnings: {% for w in dq.warnings %}{{ w }}{% if not loop.last %}; {% endif %}{% endfor %}</p>{% endif %}
+  <div class="grid">
+    <div class="panel">
+      <h3>Matches</h3>
+      <ul class="kv">
+        <li><span>Matches</span><strong>{{ "{:,}".format(dq.matches.rows) }}</strong></li>
+        <li><span>Dates</span><strong>{{ dq.matches.first_date }} to {{ dq.matches.last_date }}</strong></li>
+        <li><span>Teams</span><strong>{{ dq.matches.teams }}</strong></li>
+        <li><span>Tournaments</span><strong>{{ dq.matches.tournaments }}</strong></li>
+        <li><span>Neutral-venue matches</span><strong>{{ "{:,}".format(dq.matches.neutral) }}</strong></li>
+        <li><span>Goals</span><strong>{{ "{:,}".format(dq.matches.goals) }}</strong></li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3>Goalscorer coverage</h3>
+      <ul class="kv">
+        <li><span>Scorer rows</span><strong>{{ "{:,}".format(dq.goalscorers.rows) }} ({{ dq.goalscorers.share_of_goals_pct }}% of goals)</strong></li>
+        <li><span>Matches with complete timelines</span><strong>{{ "{:,}".format(dq.goalscorers.complete_timelines) }}</strong></li>
+        <li><span>Coverage of scoring matches</span><strong>{{ dq.goalscorers.coverage_of_scoring_matches_pct }}% (since 1990: {{ dq.goalscorers.coverage_since_1990_pct }}%)</strong></li>
+        <li><span>Goals without a minute</span><strong>{{ dq.goalscorers.minute_missing }}</strong></li>
+        <li><span>Scorer names</span><strong>{{ dq.goalscorers.scorer_names }}</strong></li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3>Team to development-data crosswalk</h3>
+      <ul class="kv">
+        {% for k, v in dq.crosswalk.by_mapping.items() %}<li><span>{{ k|capitalize }}</span><strong>{{ v }} teams</strong></li>{% endfor %}
+        <li><span>Both teams mapped</span><strong>{{ dq.crosswalk.both_teams_mapped_pct }}% of matches (since 1990: {{ dq.crosswalk.both_teams_mapped_since_1990_pct }}%)</strong></li>
+        <li><span>Unmapped, by reason</span><strong>{% for k, v in dq.crosswalk.unmapped_by_reason.items() %}{{ k|replace("_", " ") }} {{ v }}{% if not loop.last %}; {% endif %}{% endfor %}</strong></li>
+        <li><span>Unreviewed new teams</span><strong>{{ dq.crosswalk.unreviewed_teams|length }}</strong></li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3>Venues and quirks</h3>
+      <ul class="kv">
+        <li><span>Third-party-hosted matches</span><strong>{{ "{:,}".format(dq.venues.third_party_hosted) }}</strong></li>
+        <li><span>Neutral flag, but a participant's country</span><strong>{{ dq.venues.neutral_flag_but_venue_is_participant }}</strong></li>
+        <li><span>Home flag, but neither team's country</span><strong>{{ dq.venues.home_flag_but_venue_is_neither_team }}</strong></li>
+        <li><span>Shootouts joined / excluded</span><strong>{{ dq.shootouts.joined }} / {{ dq.shootouts.excluded_without_match }}</strong></li>
+        <li><span>Duplicate match keys</span><strong>{{ dq.duplicate_match_keys.keys }} ({{ dq.duplicate_match_keys.handling }})</strong></li>
+        <li><span>WDI economies kept / entities excluded</span><strong>{{ dq.wdi.economies }} / {{ dq.wdi.excluded_aggregates_or_unclassified }}</strong></li>
+      </ul>
+    </div>
+  </div>
+  <details class="evidence">
+    <summary><span class="chev">&#9656;</span> Files and checksums</summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th>File</th><th>Rows</th><th>Bytes</th><th>SHA-256 (first 16)</th><th>Matches verified version</th></tr></thead>
+      <tbody>{% for path, f in dq.files.items() %}<tr><td>{{ path }}</td><td>{{ "{:,}".format(f.rows) }}</td><td>{{ "{:,}".format(f.bytes) }}</td><td><code>{{ f.sha256[:16] }}</code></td><td>{{ "yes" if f.matches_verified else "no" }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </details>
+  <details class="evidence">
+    <summary><span class="chev">&#9656;</span> Goalscorer coverage by decade</summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Decade</th><th>Scoring matches</th><th>With timeline</th><th>Coverage %</th></tr></thead>
+      <tbody>{% for d in dq.goalscorers.per_decade %}<tr><td>{{ d.decade }}s</td><td>{{ "{:,}".format(d.scoring_matches) }}</td><td>{{ "{:,}".format(d.with_timeline) }}</td><td>{{ d.coverage_pct }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </details>
+  {% endif %}
+</section>
+{% endblock %}

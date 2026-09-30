@@ -28,7 +28,7 @@ Facts about the data that shape every method:
 
 ### Results
 
-- A win scores 1, a draw 0.5, and a loss 0 for rating purposes. A match decided by a penalty shootout counts as a draw; the shootout winner is reported separately.
+- A win scores 1, a draw 0.5, and a loss 0 for rating purposes, using the score after extra time. A penalty shootout does not change the result (a drawn match stays a draw); the shootout winner is reported separately. Some shootouts follow a match that was not drawn: the second leg of a two-legged tie.
 - Points per match, where shown, use 3 for a win and 1 for a draw.
 
 ### Team and venue identity

@@ -1,0 +1,5 @@
+Series Code,Topic,Indicator Name,Long definition,Unit of measure,Periodicity,Other notes,Aggregation method,Limitations and exceptions,Source,Statistical concept and methodology,Development relevance,License Type
+SP.POP.TOTL,Synthetic,"Population, total",,,,,,,,,,
+NY.GDP.PCAP.KD,Synthetic,GDP per capita (constant 2015 US$),,,,,,,,,,
+SP.URB.TOTL.IN.ZS,Synthetic,Urban population (% of total population),,,,,,,,,,
+XX.UNUSED,Synthetic,Unused indicator,,,,,,,,,,

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Trace {{ target[:8] }}{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>Local trace view</h2>
+  <p class="dim">Spans held in memory by web and insights for trace <code class="copy" data-copy="{{ target }}">{{ target }}</code>. Application Insights shows the same trace after ingestion.</p>
+  {% if error %}<p class="notice">{{ error }}</p>{% endif %}
+  {% if spans %}
+  <p class="headline">{{ spans|length }} spans over {{ total_ms }} ms.</p>
+  <ol class="waterfall">
+    {% for s in spans %}
+    <li class="span depth-{{ [s.depth, 6]|min }}">
+      <div class="span-label"><span class="svc svc-{{ s.service }}">{{ s.service }}</span> {{ s.name }} <span class="dim">{{ s.duration_ms }} ms</span>{% if s.status == "ERROR" %} <span class="bad">error</span>{% endif %}</div>
+      <div class="bar-track"><span class="bar svc-{{ s.service }}" data-left="{{ s.left_pct }}" data-width="{{ s.width_pct }}"></span></div>
+      {% if s.attributes %}<details class="attrs"><summary><span class="chev">&#9656;</span> attributes</summary><dl class="brief">{% for k, v in s.attributes.items() %}<dt>{{ k }}</dt><dd><code>{{ v }}</code></dd>{% endfor %}</dl></details>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  {% endif %}
+</section>
+{% endblock %}

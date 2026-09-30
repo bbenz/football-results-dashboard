@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<details class="about panel">
+  <summary><span class="chev">&#9656;</span> <span class="name">About this app</span> <span class="dim">read this first</span></summary>
+  <dl class="brief">
+    <dt>What it is</dt>
+    <dd>A reference app that answers seven questions about more than 150 years of men's international football, and runs the same container images on Azure Kubernetes Service (AKS) and Azure Container Apps (ACA).</dd>
+    <dt>How it works</dt>
+    <dd>The <em>web</em> service renders these pages. The internal <em>insights</em> service holds deterministic analytics tools over a curated copy of the data and an AI agent. An <em>ingest</em> job verifies the raw downloads and builds that curated copy.</dd>
+    <dt>What is deterministic and what is AI</dt>
+    <dd>Every number, chart, and table comes from tested analytics code. A Microsoft Foundry model reads your question, picks tools, and explains their results in words. A grounding check rejects any number the model writes that the tools did not return.</dd>
+    <dt>Where the data came from</dt>
+    <dd>Two public Kaggle datasets (see the footer). The repository contains no data: you download it yourself. Coverage and quirks are on the <a href="/data">Data</a> page.</dd>
+  </dl>
+</details>
+
+{% if error %}<p class="notice">{{ error }}</p>{% endif %}
+
+<div class="toolbar">
+  <button type="button" class="expand-all">Expand all</button>
+</div>
+
+{% for item in cards %}
+{% set c = item.card %}{% set r = item.result %}
+<section class="card" id="q{{ c.number }}">
+  <h2><span class="qn">Q{{ c.number }}</span> {{ c.question }}</h2>
+  <details class="explain">
+    <summary><span class="chev">&#9656;</span> About this question</summary>
+    <dl class="brief">
+      <dt>What is asked</dt><dd>{{ c.asks }}</dd>
+      <dt>Data and method</dt><dd>{{ c.data_method }}</dd>
+      <dt>What the result looks like</dt><dd>{{ c.expected }}</dd>
+      <dt>Why it matters</dt><dd>{{ c.why }}</dd>
+      {% if r.caveats %}<dt>Caveats</dt><dd><ul>{% for cv in r.caveats %}<li>{{ cv }}</li>{% endfor %}</ul></dd>{% endif %}
+    </dl>
+  </details>
+  {% include "_result.html" %}
+</section>
+{% endfor %}
+{% endblock %}

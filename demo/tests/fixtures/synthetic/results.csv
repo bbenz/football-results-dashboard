@@ -1,0 +1,14 @@
+date,home_team,away_team,home_score,away_score,tournament,city,country,neutral
+1901-03-02,Avalon,Borealis,2,0,Friendly,Port Avalon,Avalon,FALSE
+1902-05-10,Borealis,Cascadia,1,1,Friendly,Northgate,Borealis,FALSE
+1903-06-14,Cascadia,Avalon,0,3,Friendly,Cascade City,Cascadia,FALSE
+1905-08-20,Avalon,Cascadia,4,1,British Home Championship,Port Avalon,Avalon,FALSE
+1907-09-01,Borealis,Avalon,1,1,Friendly,Midway,Dunmore,TRUE
+2011-03-26,Avalon,Borealis,1,0,FIFA World Cup qualification,Port Avalon,Avalon,FALSE
+2012-06-09,Dunmore,Avalon,2,2,UEFA Euro,Dunmore City,Dunmore,FALSE
+2013-10-11,Cascadia,Borealis,0,2,Friendly,Cascade City,Cascadia,FALSE
+2014-06-15,Borealis,Elbaria,3,1,FIFA World Cup,Dunmore City,Dunmore,TRUE
+2014-06-20,Dunmore,Elbaria,1,0,FIFA World Cup,Dunmore City,Dunmore,FALSE
+2016-06-10,Elbaria,Dunmore,1,1,UEFA Euro,Elbaria Town,Old Elbaria,FALSE
+2018-11-15,Avalon,Dunmore,0,1,UEFA Nations League,Port Avalon,Avalon,FALSE
+2021-07-01,Cascadia,Elbaria,2,2,Gold Cup,Cascade City,Cascadia,FALSE

@@ -1,0 +1,82 @@
+[project]
+name = "football-insights"
+version = "1.0.0"
+description = "Deterministic analytics over 150 years of international football, explained by a Microsoft Foundry model, deployed to AKS and Azure Container Apps."
+license = "MIT"
+requires-python = ">=3.12,<3.13"
+# Shared by every service. Each image installs one extra on top.
+dependencies = [
+    "pydantic>=2.11",
+    "pydantic-settings>=2.7",
+    "pyyaml>=6.0",
+    "azure-identity>=1.25",
+    "azure-monitor-opentelemetry>=1.8.10",
+    "opentelemetry-sdk>=1.39",
+]
+
+[project.optional-dependencies]
+web = [
+    "fastapi>=0.120",
+    "uvicorn>=0.38",
+    "jinja2>=3.1",
+    "httpx>=0.28",
+    "python-multipart>=0.0.20",
+]
+insights = [
+    "fastapi>=0.120",
+    "uvicorn>=0.38",
+    "duckdb>=1.5",
+    "networkx>=3.5",
+    "azure-storage-blob>=12.26",
+    "azure-ai-projects>=2.7",
+    "openai>=3.20",
+]
+ingest = [
+    "duckdb>=1.5",
+    "azure-storage-blob>=12.26",
+]
+dev = [
+    "pytest>=9.0",
+    "ruff>=0.14",
+    "mypy>=1.18",
+    "types-PyYAML>=6.0",
+    "uv>=0.12",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+    "realdata: needs the raw data under FOOTBALL_DATA_DIR; skipped when absent",
+    "live: calls live Azure resources; skipped without configuration",
+    "replay: uses recorded model outputs, labeled as replays",
+]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF"]
+ignore = ["S101", "S311", "RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "B011"]
+# SQL here is composed from internal constants (file paths, table and column names, indicator codes);
+# values that come from callers are validated enums or bound parameters.
+"src/football_insights/ingest/pipeline.py" = ["S608"]
+"src/football_insights/data/verify.py" = ["S608"]
+"src/football_insights/store.py" = ["S608"]
+"src/football_insights/analytics/*.py" = ["S608"]
+# The guard shells out to git by design.
+"scripts/check_no_data.py" = ["S603", "S607"]
+
+[tool.mypy]
+python_version = "3.12"
+packages = ["football_insights"]
+mypy_path = "src"
+ignore_missing_imports = true
+warn_unused_ignores = true
+check_untyped_defs = true

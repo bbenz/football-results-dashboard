@@ -1,0 +1,7 @@
+<div class="badge {{ badge.platform|lower }}" title="Values come from this deployment's configuration, not from the page.">
+  <span class="where"><strong>{{ badge.platform }}</strong>{% if badge.region and badge.region != "n/a" %} · {{ badge.region }}{% endif %}</span>
+  <span class="item" title="Short image digest of web{% if badge.insights_digest %} and insights{% endif %}">image {{ badge.short_digest }}{% if badge.insights_digest and badge.insights_digest != badge.short_digest %} / {{ badge.insights_digest }}{% endif %}</span>
+  <span class="item" title="{{ badge.dataset_label }}">data {{ badge.dataset_version }}</span>
+  <span class="item">model {{ badge.model_deployment }}</span>
+  <span class="item ai-{{ badge.narrative_mode }}">AI narrative: {{ badge.narrative_mode }}</span>
+</div>

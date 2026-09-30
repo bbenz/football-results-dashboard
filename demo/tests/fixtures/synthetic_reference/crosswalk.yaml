@@ -1,0 +1,9 @@
+# Synthetic crosswalk for tests: fictional teams mapped to fictional X-prefixed economies.
+schema_version: 1
+reviewed: 2026-09-29
+teams:
+  - {team: "Avalon", wdi: XAV, match: exact}
+  - {team: "Borealis", wdi: XBO, match: alias}
+  - {team: "Cascadia", wdi: XCA, match: shared, note: "Shares an economy in this synthetic world."}
+  - {team: "Dunmore", wdi: XDU, match: exact, valid_from: 2000}
+  - {team: "Elbaria", wdi: null, match: none, reason: historical, note: "A dissolved synthetic state."}

@@ -1,0 +1,9 @@
+date,home_team,away_team,team,scorer,minute,own_goal,penalty
+1901-03-02,Avalon,Borealis,Avalon,Player One,12,FALSE,FALSE
+1901-03-02,Avalon,Borealis,Avalon,Player Two,80,FALSE,TRUE
+2011-03-26,Avalon,Borealis,Avalon,Player Three,NA,FALSE,FALSE
+2014-06-15,Borealis,Elbaria,Borealis,Player Four,5,FALSE,FALSE
+2014-06-15,Borealis,Elbaria,Borealis,Player Five,77,FALSE,TRUE
+2014-06-15,Borealis,Elbaria,Elbaria,Player Six,88,TRUE,FALSE
+2014-06-15,Borealis,Elbaria,Borealis,Player Seven,90,FALSE,FALSE
+2021-07-01,Cascadia,Elbaria,Cascadia,Player Eight,30,FALSE,FALSE

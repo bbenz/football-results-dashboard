@@ -1,0 +1,10 @@
+# Live-model overlay for Docker Compose, used by `fi up -LiveModel`.
+# Containers cannot reuse the host's Azure CLI sign-in, so insights reads a short-lived
+# token file that the host script writes and refreshes. No keys exist anywhere.
+services:
+  insights:
+    environment:
+      AZURE_TOKEN_FILE: /run/secrets/azure/tokens.json
+      AI_NARRATIVE_MODE: live
+    volumes:
+      - ../../.local/secrets:/run/secrets/azure:ro

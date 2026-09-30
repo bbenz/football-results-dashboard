@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}Football insights{% endblock %} · 150 years of international football</title>
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/app.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <h1><a href="/">Football insights</a></h1>
+    <span class="sub">150 years of international football · one app, two platforms</span>
+  </div>
+  <nav class="nav"><a href="/">Questions</a><a href="/data">Data</a></nav>
+  <div class="zoom" aria-label="Text size">
+    <button type="button" data-zoom="-2" title="Smaller text">A&minus;</button>
+    <button type="button" data-zoom="2" title="Larger text">A+</button>
+    <button type="button" data-zoom="0" title="Reset text size">Reset</button>
+  </div>
+  {% include "_badge.html" %}
+</header>
+<main>
+{% block content %}{% endblock %}
+</main>
+<footer class="foot">
+  <p><strong>Data attribution.</strong> Match data: <a href="https://www.kaggle.com/datasets/martj42/international-football-results-from-1872-to-2017">International football results from 1872 to 2026</a> by Mart Jürisoo (CC0: Public Domain), via Kaggle.
+  Development data: World Bank <a href="https://datacatalog.worldbank.org/public-licenses">World Development Indicators</a> (CC BY 4.0), via <a href="https://www.kaggle.com/datasets/yogeshm01/global-development-data-19602025">Global Development Data (1960–2025)</a> by Yogesh Mishra on Kaggle; reshaped and filtered for this app.</p>
+  <p class="dim">Numbers come from deterministic analytics over the curated data. The AI model only selects tools and explains their results.{% if trace_id %} Page trace ID: <code class="copy" data-copy="{{ trace_id }}" title="Copy trace ID">{{ trace_id }}</code>{% endif %}</p>
+</footer>
+</body>
+</html>

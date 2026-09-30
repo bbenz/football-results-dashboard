@@ -1,0 +1,30 @@
+{# One tool result: headline, chart, summary, key numbers, and an evidence expander. #}
+<p class="headline">{{ r.headline }}</p>
+{% if r.chart %}
+<figure class="figure">
+  {{ chart_svg(r.chart) }}
+  <figcaption class="summary"><strong>Chart summary.</strong> {{ r.chart.summary }}</figcaption>
+</figure>
+{% endif %}
+{% if r.facts %}
+<ul class="facts">
+  {% for f in r.facts %}<li><span class="value">{{ f|fact }}</span><span class="label">{{ f.label }}</span><code class="eid">{{ f.id }}</code></li>{% endfor %}
+</ul>
+{% endif %}
+<details class="evidence">
+  <summary><span class="chev">&#9656;</span> Evidence: tool call, table, coverage, and caveats</summary>
+  <dl class="brief">
+    <dt>Tool call</dt><dd><code>{{ r.tool }}({% for k, v in r.params.items() %}{{ k }}={{ v }}{% if not loop.last %}, {% endif %}{% endfor %})</code></dd>
+    <dt>Method</dt><dd>{{ r.method }}</dd>
+    {% if r.coverage %}<dt>Coverage</dt><dd><ul>{% for c in r.coverage %}<li>{{ c }}</li>{% endfor %}</ul></dd>{% endif %}
+    {% if r.caveats %}<dt>Caveats</dt><dd><ul>{% for c in r.caveats %}<li>{{ c }}</li>{% endfor %}</ul></dd>{% endif %}
+    {% if r.cannot_tell %}<dt>What this data can't tell you</dt><dd>{{ r.cannot_tell }}</dd>{% endif %}
+    <dt>Versions</dt><dd>method {{ r.method_version }} · data {{ r.dataset_version }}</dd>
+  </dl>
+  {% if r.table %}
+  <div class="tablewrap"><table>
+    <thead><tr>{% for c in r.table.columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+    <tbody>{% for row in r.table.rows %}<tr>{% for cell in row %}<td>{{ "" if cell is none else cell }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+  </table></div>
+  {% endif %}
+</details>
