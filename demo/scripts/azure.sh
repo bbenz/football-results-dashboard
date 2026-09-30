@@ -383,7 +383,8 @@ rollout_v2() {
   suffix="v2-$(date -u +%m%d%H%M)"
   echo "Rolling out tag $tag with revision suffix $suffix."
   rg="$(required_env AZURE_RESOURCE_GROUP)"; web="$(required_env ACA_WEB_APP_NAME)"; insights="$(required_env ACA_INSIGHTS_APP_NAME)"
-  current="$(az containerapp revision list --resource-group "$rg" --name "$web" --query '[?properties.active].name | [0]' -o tsv)" || { echo "Could not determine current ACA web revision." >&2; exit 1; }
+  # The revision serving the most traffic: an idle revision at 0% can still be active.
+  current="$(az containerapp revision list --resource-group "$rg" --name "$web" -o json | "$PYTHON" -c 'import json,sys; r=[x for x in json.load(sys.stdin) if x["properties"].get("active")]; r.sort(key=lambda x: x["properties"].get("trafficWeight") or 0, reverse=True); print(r[0]["name"] if r else "")')" || { echo "Could not determine current ACA web revision." >&2; exit 1; }
   [[ -n "$current" ]] || { echo "Could not determine current ACA web revision." >&2; exit 1; }
   az_checked containerapp ingress traffic set --resource-group "$rg" --name "$web" --revision-weight "$current=100" --output none
   az_checked containerapp update --resource-group "$rg" --name "$web" --image "${registry}/football-insights-web@${web_digest}" --set-env-vars "IMAGE_DIGEST=${web_digest}" --revision-suffix "$suffix" --output none

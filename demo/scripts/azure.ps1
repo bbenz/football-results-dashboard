@@ -451,8 +451,11 @@ function Invoke-RolloutV2 {
     $rg = Get-RequiredEnv 'AZURE_RESOURCE_GROUP'
     $web = Get-RequiredEnv 'ACA_WEB_APP_NAME'
     $insights = Get-RequiredEnv 'ACA_INSIGHTS_APP_NAME'
-    $current = az containerapp revision list --resource-group $rg --name $web --query '[?properties.active].name | [0]' -o tsv
-    if ($LASTEXITCODE -ne 0 -or -not $current) { throw 'Could not determine current ACA web revision.' }
+    # The revision serving the most traffic: an idle revision at 0% can still be active.
+    $revisions = az containerapp revision list --resource-group $rg --name $web -o json | ConvertFrom-Json
+    if ($LASTEXITCODE -ne 0) { throw 'Could not list ACA web revisions.' }
+    $current = @($revisions | Where-Object { $_.properties.active } | Sort-Object { [int]$_.properties.trafficWeight } -Descending | Select-Object -First 1).name
+    if (-not $current) { throw 'Could not determine current ACA web revision.' }
     Invoke-AzChecked containerapp ingress traffic set --resource-group $rg --name $web --revision-weight "$current=100" --output none
     Invoke-AzChecked containerapp update --resource-group $rg --name $web --image "$($v2.registry)/football-insights-web@$($v2.web)" --set-env-vars "IMAGE_DIGEST=$($v2.web)" --revision-suffix $suffix --output none
     $newWeb = az containerapp revision list --resource-group $rg --name $web --query "[?ends_with(name, '$suffix')].name | [0]" -o tsv
