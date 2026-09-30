@@ -109,7 +109,19 @@ IMAGE_TAG=<v2-tag> ./demo/scripts/demo.sh build-push --output v2
 ./demo/scripts/demo.sh rollback
 ```
 
-`rollout-v2` reads the tag and digests from `.local/deploy/digests-v2.json`. ACA web first pins 100% traffic to the current active revision, creates a uniquely suffixed v2 revision, then splits 50/50 and records `.local/deploy/rollout.json`. ACA insights switches fully because it is Single revision mode. AKS uses `kubectl set image` for web and insights and waits for rollouts. `rollback` reads `rollout.json` for ACA web, updates ACA insights to the v1 digest, sets AKS images explicitly back to v1 (not `rollout undo`), waits, and deletes `rollout.json` after a successful ACA rollback.
+`rollout-v2` reads the tag and digests from `.local/deploy/digests-v2.json`. ACA web first pins 100% traffic to the current active revision, creates a uniquely suffixed v2 revision, then splits 50/50 and records `.local/deploy/rollout.json`. ACA insights switches fully because it is Single revision mode. AKS uses `kubectl set image` for web and insights and waits for rollouts. `rollback` takes `aks`, `aca`, or `both` (the default). On ACA it moves 100% of web traffic back to the previous revision, which is still running, so the change is immediate, and returns insights to the v1 digest. On AKS it sets the images back to the v1 digests with a rolling update (not `rollout undo`, which would revert whatever changed last, such as a model switch).
+
+### Save pages for offline fallback
+
+```powershell
+./demo/scripts/demo.ps1 snapshot both
+```
+
+```bash
+./demo/scripts/demo.sh snapshot both
+```
+
+`snapshot` takes `aks`, `aca`, `both`, or `local`. It saves every view of every insight card, the Data page, and the answers to the prepared livestream questions as self-contained HTML under `EVIDENCE_DIR/replay/`. Each page carries a banner with its source and capture time, so a saved page is never mistaken for the live app. Run it after a successful rehearsal; open `index.html` from the folder to check that the pages work offline.
 
 ### Trace, preflight, reset
 

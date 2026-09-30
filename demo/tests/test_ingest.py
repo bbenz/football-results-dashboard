@@ -55,6 +55,9 @@ def test_rerun_reuses_version_with_identical_checksums(tmp_path: Path, raw_dir: 
     assert elsewhere.manifest["outputs"] == first.manifest["outputs"]
     pointer = LocalCuratedStorage(tmp_path / "curated").read_pointer()
     assert pointer is not None and pointer["version"] == first.version
+    # Output bytes, and so checksums, must not depend on the operating system that ran ingest.
+    for written in (tmp_path / "curated").rglob("*.json"):
+        assert b"\r\n" not in written.read_bytes(), written.name
 
 
 def test_changed_input_changes_version(tmp_path: Path, raw_dir: Path, reference) -> None:  # type: ignore[no-untyped-def]

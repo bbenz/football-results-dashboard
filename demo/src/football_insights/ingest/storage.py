@@ -56,13 +56,13 @@ class LocalCuratedStorage:
     def write_pointer(self, pointer: dict[str, Any]) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
         tmp = self.root / f".{POINTER}.tmp"
-        tmp.write_text(json.dumps(pointer, indent=2, sort_keys=True), encoding="utf-8")
+        tmp.write_text(json.dumps(pointer, indent=2, sort_keys=True), encoding="utf-8", newline="\n")
         os.replace(tmp, self.root / POINTER)
 
     def write_run(self, name: str, report: dict[str, Any]) -> None:
         runs = self.root / "runs"
         runs.mkdir(parents=True, exist_ok=True)
-        (runs / f"{name}.json").write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
+        (runs / f"{name}.json").write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8", newline="\n")
 
     def fetch(self, version: str, files: list[str], dest: Path) -> Path:
         return self.root / version

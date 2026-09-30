@@ -11,6 +11,7 @@ Commands:
   capture-narratives  Save labeled narratives for the offline fallback tier.
   load-test     Bounded load on deterministic pages (never the model).
   parity        Compare deterministic card results across web endpoints (AKS and ACA).
+  snapshot      Save a web endpoint's pages, openable offline, for the fallback tiers.
 """
 
 from __future__ import annotations
@@ -198,6 +199,19 @@ def _parity(args: argparse.Namespace) -> int:
     return 0 if report.identical else 1
 
 
+def _snapshot(args: argparse.Namespace) -> int:
+    from . import snapshot
+
+    settings = get_settings()
+    stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    out = Path(args.out) if args.out else settings.evidence_dir / "replay" / f"{args.label}-{stamp}"
+    snap = snapshot.run(args.url, out, include_answers=not args.no_answers)
+    for failure in snap.failed:
+        print(f"  NOT saved {failure}", file=sys.stderr)
+    print(f"snapshot: saved {len(snap.saved)} pages from {snap.url} to {out} (open index.html offline)")
+    return 1 if snap.failed else 0
+
+
 def _load(args: argparse.Namespace) -> int:
     from . import loadtest
 
@@ -287,6 +301,13 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("parity", help="compare deterministic card results across web endpoints")
     p.add_argument("--url", action="append", required=True, help="base URL of a web service (repeat)")
     p.set_defaults(func=_parity)
+
+    p = sub.add_parser("snapshot", help="save a web endpoint's pages for offline fallback (replay artifacts)")
+    p.add_argument("--url", required=True, help="base URL of a web service")
+    p.add_argument("--label", default="web", help="folder label, for example aks or aca")
+    p.add_argument("--out", help="output folder (default: EVIDENCE_DIR/replay/<label>-<UTC time>)")
+    p.add_argument("--no-answers", action="store_true", help="skip the prepared questions (no model calls)")
+    p.set_defaults(func=_snapshot)
 
     args = parser.parse_args(argv)
     return int(args.func(args))

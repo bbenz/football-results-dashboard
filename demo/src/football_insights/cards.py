@@ -3,10 +3,12 @@ looks like, and why it matters. The numbers on each card come from its tool call
 
 from __future__ import annotations
 
+import itertools
 from dataclasses import dataclass
 from typing import Any
 
-from .analytics.registry import QUESTION_MODULES, QUESTIONS
+from .analytics.registry import QUESTION_MODULES, QUESTIONS, TOOLS
+from .reference import get_reference
 
 
 @dataclass(frozen=True)
@@ -88,3 +90,60 @@ CARDS: tuple[Card, ...] = _cards()
 
 def by_number() -> dict[int, Card]:
     return {card.number: card for card in CARDS}
+
+
+VIEW_LABELS: dict[str, str] = {
+    "peak": "Peak rating", "career_average": "Career average rating", "time_at_top": "Time at the top",
+    "records": "Win rate and points per match", "wins_per_million": "Wins per million people (novelty)",
+    "all": "Leader of every era",
+    "home_advantage": "Home advantage", "goals_per_match": "Goals per match",
+    "strength_spread": "Spread of team strength",
+    "goal_timing": "Goal timing and penalties", "strength_by_region": "Strength by World Bank region",
+    "strength_by_income": "Strength by World Bank income group",
+    "team_counts": "How the number of teams changed", "frequent_pairings": "Most frequent pairings",
+    "communities": "Fixture-network communities", "region_mixing": "Matches within and across regions",
+    "ranking": "Top third-party hosts", "trend": "Third-party share by decade", "cities": "Top host cities",
+    "host_groups": "Hosts by region and income group",
+    "pooled": "Pooled host effect", "by_tournament": "Host effect by tournament",
+    "edition": "Hosts of the latest FIFA World Cup", "gdp_split": "Host effect by host GDP per capita",
+    "leaders": "Most active teams", "effect": "Friendlies and later competitive results",
+    "by_income": "Friendlies by income group",
+}
+# Views that use the World Bank development indicators.
+DEVELOPMENT_LENS = frozenset({"wins_per_million", "strength_by_region", "strength_by_income", "communities",
+                              "region_mixing", "host_groups", "gdp_split", "by_income"})
+
+
+@dataclass(frozen=True)
+class View:
+    label: str
+    arguments: dict[str, Any]
+
+
+def views(card: Card) -> tuple[View, ...]:
+    """The card's views: each value of its tool's main choice, with optional filters left open.
+
+    The web page offers exactly these, by index, so a visitor can switch views without the model and without
+    sending free-form tool arguments.
+    """
+    eras = {era.id: era.label for era in get_reference().eras}
+    options: dict[str, list[Any]] = {}
+    for field, spec in TOOLS[card.tool].params.model_json_schema().get("properties", {}).items():
+        variants = spec.get("anyOf", [spec])
+        if any(variant.get("type") == "null" for variant in variants):
+            options[field] = [None]
+        else:
+            options[field] = [value for variant in variants for value in variant.get("enum", [])]
+    out = []
+    for combo in itertools.product(*options.values()):
+        choice = next(value for value in combo if value is not None)
+        label = eras.get(choice) or VIEW_LABELS.get(choice, str(choice).replace("_", " ").capitalize())
+        if choice in DEVELOPMENT_LENS:
+            label += " (development lens)"
+        out.append(View(label=label, arguments=dict(zip(options, combo, strict=True))))
+    return tuple(out)
+
+
+def default_view(card: Card) -> int:
+    choices = views(card)
+    return next((i for i, view in enumerate(choices) if view.arguments == card.arguments), 0)

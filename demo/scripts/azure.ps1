@@ -299,6 +299,15 @@ function Test-Endpoint([string]$Name, [string]$BaseUrl, $Digests) {
     Write-Host ("{0}: healthy; badge shows {1} and data {2}" -f $Name, $expected, $version)
     return $version
 }
+function Invoke-Snapshot([string]$Platform = 'both') {
+    # Replay artifacts for the fallback tiers: every card view and the prepared answers, openable offline.
+    if ($Platform -notin @('aks', 'aca', 'both', 'local')) { throw 'Usage: demo snapshot [aks|aca|both|local]' }
+    $targets = if ($Platform -eq 'both') { @('aks', 'aca') } else { @($Platform) }
+    foreach ($target in $targets) {
+        $url = if ($target -eq 'local') { 'http://127.0.0.1:8080' } else { Get-PlatformUrl $target }
+        Invoke-Checked $script:Python -m football_insights snapshot --url $url --label $target
+    }
+}
 function Invoke-Parity {
     $aks = Get-PlatformUrl 'aks'
     $aca = Get-PlatformUrl 'aca'
@@ -396,33 +405,39 @@ function Invoke-RolloutV2 {
     Write-Host 'ACA web traffic:'; az containerapp ingress traffic show --resource-group $rg --name $web -o table
     Write-Host 'AKS images:'; kubectl -n football get deploy web insights -o wide
 }
-function Invoke-Rollback {
+function Invoke-Rollback([string]$Platform = 'both') {
+    if ($Platform -notin @('aks', 'aca', 'both')) { throw 'Usage: demo rollback [aks|aca|both]' }
     Set-DemoSubscription
     Import-DeploymentOutputs
     $v1 = Import-Digests
-    Connect-Aks
+    $v1Web = "$($v1.registry)/football-insights-web@$($v1.web)"
+    $v1Insights = "$($v1.registry)/football-insights-insights@$($v1.insights)"
     $rg = Get-RequiredEnv 'AZURE_RESOURCE_GROUP'
     $web = Get-RequiredEnv 'ACA_WEB_APP_NAME'
-    $insights = Get-RequiredEnv 'ACA_INSIGHTS_APP_NAME'
-    $rolloutPath = Get-RolloutPath
-    $acaRolledBack = $false
-    if (Test-Path $rolloutPath) {
-        $rollout = Get-Content $rolloutPath -Raw | ConvertFrom-Json
-        if ($rollout.aca_web_previous) {
+    if ($Platform -in @('aca', 'both')) {
+        $insights = Get-RequiredEnv 'ACA_INSIGHTS_APP_NAME'
+        $rolloutPath = Get-RolloutPath
+        if (Test-Path $rolloutPath) {
+            # The previous revision is still running, so this is only a traffic change and takes effect at once.
+            $rollout = Get-Content $rolloutPath -Raw | ConvertFrom-Json
             Invoke-AzChecked containerapp ingress traffic set --resource-group $rg --name $web --revision-weight "$($rollout.aca_web_previous)=100" --output none
-            $acaRolledBack = $true
-        }
-    } else { Write-Host 'no v2 rollout recorded; skipping ACA web traffic rollback.' }
-    Invoke-AzChecked containerapp update --resource-group $rg --name $insights --image "$($v1.registry)/football-insights-insights@$($v1.insights)" --output none
-    $webImage = Get-ContainerImage 'web'
-    $insightsImage = Get-ContainerImage 'insights'
-    if ($webImage -ne "$($v1.registry)/football-insights-web@$($v1.web)") { Invoke-KubectlChecked -n football set image deployment/web "web=$($v1.registry)/football-insights-web@$($v1.web)" } else { Write-Host 'AKS web already runs v1 image.' }
-    if ($insightsImage -ne "$($v1.registry)/football-insights-insights@$($v1.insights)") { Invoke-KubectlChecked -n football set image deployment/insights "insights=$($v1.registry)/football-insights-insights@$($v1.insights)" } else { Write-Host 'AKS insights already runs v1 image.' }
-    Invoke-KubectlChecked -n football rollout status deployment/web --timeout=10m
-    Invoke-KubectlChecked -n football rollout status deployment/insights --timeout=10m
-    if ($acaRolledBack -and (Test-Path $rolloutPath)) { Remove-Item -Force $rolloutPath }
-    Write-Host 'ACA web traffic:'; az containerapp ingress traffic show --resource-group $rg --name $web -o table
-    Write-Host 'AKS images:'; kubectl -n football get deploy web insights -o wide
+            Remove-Item -Force $rolloutPath
+        } else { Write-Host 'No v2 rollout recorded for ACA web; its traffic is unchanged.' }
+        $current = az containerapp show --resource-group $rg --name $insights --query 'properties.template.containers[0].image' -o tsv
+        if ($current -ne $v1Insights) { Invoke-AzChecked containerapp update --resource-group $rg --name $insights --image $v1Insights --output none }
+        else { Write-Host 'ACA insights already runs the v1 image.' }
+        Write-Host 'ACA web traffic:'; az containerapp ingress traffic show --resource-group $rg --name $web -o table
+    }
+    if ($Platform -in @('aks', 'both')) {
+        # An explicit rolling update back to the v1 digests; `kubectl rollout undo` would revert whatever changed
+        # last, which may be a model switch rather than the image.
+        Connect-Aks
+        if ((Get-ContainerImage 'web') -ne $v1Web) { Invoke-KubectlChecked -n football set image deployment/web "web=$v1Web" } else { Write-Host 'AKS web already runs the v1 image.' }
+        if ((Get-ContainerImage 'insights') -ne $v1Insights) { Invoke-KubectlChecked -n football set image deployment/insights "insights=$v1Insights" } else { Write-Host 'AKS insights already runs the v1 image.' }
+        Invoke-KubectlChecked -n football rollout status deployment/web --timeout=10m
+        Invoke-KubectlChecked -n football rollout status deployment/insights --timeout=10m
+        Write-Host 'AKS images:'; kubectl -n football get deploy web insights -o wide
+    }
 }
 function Invoke-SwitchModel([string]$Deployment) {
     if ([string]::IsNullOrWhiteSpace($Deployment)) { throw 'Usage: demo switch-model <deployment>' }

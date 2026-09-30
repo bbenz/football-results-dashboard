@@ -257,6 +257,16 @@ test_endpoint() {
   echo "$name: healthy; badge shows $expected and data $version" >&2
   printf '%s' "$version"
 }
+snapshot() {
+  # Replay artifacts for the fallback tiers: every card view and the prepared answers, openable offline.
+  local platform="${1:-both}" targets target url
+  [[ "$platform" =~ ^(aks|aca|both|local)$ ]] || { echo "Usage: demo snapshot [aks|aca|both|local]" >&2; exit 1; }
+  [[ "$platform" == both ]] && targets="aks aca" || targets="$platform"
+  for target in $targets; do
+    if [[ "$target" == local ]]; then url="http://127.0.0.1:8080"; else url="$(platform_url "$target")"; fi
+    "$PYTHON" -m football_insights snapshot --url "$url" --label "$target"
+  done
+}
 parity() {
   local aks aca stamp out
   aks="$(platform_url aks)"; aca="$(platform_url aca)"; stamp="$(date -u +%Y%m%dT%H%M%SZ)"; out="$(evidence_dir)/parity-${stamp}.json"
@@ -332,24 +342,35 @@ rollout_v2() {
   echo "AKS images:"; kubectl -n football get deploy web insights -o wide
 }
 rollback() {
-  set_demo_subscription; import_deployment_outputs; import_digests; connect_aks
-  local rg web insights registry rollout previous v1_web v1_insights web_image insights_image
+  local platform="${1:-both}" rg web insights registry rollout previous v1_web v1_insights current
+  [[ "$platform" == aks || "$platform" == aca || "$platform" == both ]] || { echo "Usage: demo rollback [aks|aca|both]" >&2; exit 1; }
+  set_demo_subscription; import_deployment_outputs; import_digests
   registry="$("$PYTHON" -c 'import json; print(json.load(open(".local/deploy/digests.json"))["registry"])')"
   v1_web="${registry}/football-insights-web@${WEB_IMAGE_DIGEST}"; v1_insights="${registry}/football-insights-insights@${INSIGHTS_IMAGE_DIGEST}"
-  rg="$(required_env AZURE_RESOURCE_GROUP)"; web="$(required_env ACA_WEB_APP_NAME)"; insights="$(required_env ACA_INSIGHTS_APP_NAME)"; rollout="$(rollout_path)"
-  if [[ -f "$rollout" ]]; then
-    previous="$("$PYTHON" -c 'import json,sys; print(json.load(open(sys.argv[1])).get("aca_web_previous", ""))' "$rollout")"
-    [[ -n "$previous" ]] && az_checked containerapp ingress traffic set --resource-group "$rg" --name "$web" --revision-weight "$previous=100" --output none
-  else echo "no v2 rollout recorded; skipping ACA web traffic rollback."; fi
-  az_checked containerapp update --resource-group "$rg" --name "$insights" --image "$v1_insights" --output none
-  web_image="$(container_image web)"; insights_image="$(container_image insights)"
-  [[ "$web_image" == "$v1_web" ]] && echo "AKS web already runs v1 image." || kubectl_checked -n football set image deployment/web "web=$v1_web"
-  [[ "$insights_image" == "$v1_insights" ]] && echo "AKS insights already runs v1 image." || kubectl_checked -n football set image deployment/insights "insights=$v1_insights"
-  kubectl_checked -n football rollout status deployment/web --timeout=10m
-  kubectl_checked -n football rollout status deployment/insights --timeout=10m
-  [[ -f "$rollout" ]] && rm -f "$rollout"
-  echo "ACA web traffic:"; az containerapp ingress traffic show --resource-group "$rg" --name "$web" -o table
-  echo "AKS images:"; kubectl -n football get deploy web insights -o wide
+  rg="$(required_env AZURE_RESOURCE_GROUP)"; web="$(required_env ACA_WEB_APP_NAME)"
+  if [[ "$platform" == aca || "$platform" == both ]]; then
+    insights="$(required_env ACA_INSIGHTS_APP_NAME)"; rollout="$(rollout_path)"
+    if [[ -f "$rollout" ]]; then
+      # The previous revision is still running, so this is only a traffic change and takes effect at once.
+      previous="$("$PYTHON" -c 'import json,sys; print(json.load(open(sys.argv[1]))["aca_web_previous"])' "$rollout")"
+      az_checked containerapp ingress traffic set --resource-group "$rg" --name "$web" --revision-weight "$previous=100" --output none
+      rm -f "$rollout"
+    else echo "No v2 rollout recorded for ACA web; its traffic is unchanged."; fi
+    current="$(az containerapp show --resource-group "$rg" --name "$insights" --query 'properties.template.containers[0].image' -o tsv)"
+    if [[ "$current" != "$v1_insights" ]]; then az_checked containerapp update --resource-group "$rg" --name "$insights" --image "$v1_insights" --output none
+    else echo "ACA insights already runs the v1 image."; fi
+    echo "ACA web traffic:"; az containerapp ingress traffic show --resource-group "$rg" --name "$web" -o table
+  fi
+  if [[ "$platform" == aks || "$platform" == both ]]; then
+    # An explicit rolling update back to the v1 digests; `kubectl rollout undo` would revert whatever changed
+    # last, which may be a model switch rather than the image.
+    connect_aks
+    [[ "$(container_image web)" == "$v1_web" ]] && echo "AKS web already runs the v1 image." || kubectl_checked -n football set image deployment/web "web=$v1_web"
+    [[ "$(container_image insights)" == "$v1_insights" ]] && echo "AKS insights already runs the v1 image." || kubectl_checked -n football set image deployment/insights "insights=$v1_insights"
+    kubectl_checked -n football rollout status deployment/web --timeout=10m
+    kubectl_checked -n football rollout status deployment/insights --timeout=10m
+    echo "AKS images:"; kubectl -n football get deploy web insights -o wide
+  fi
 }
 switch_model() {
   local deployment="${1:-}" allowed

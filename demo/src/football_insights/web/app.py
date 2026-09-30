@@ -23,7 +23,7 @@ from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 from opentelemetry import trace
 
-from ..cards import by_number
+from ..cards import by_number, default_view, views
 from ..charts import render as render_chart
 from ..config import get_settings
 from ..runtime import describe
@@ -185,12 +185,33 @@ def create_app(client: httpx.AsyncClient | None = None) -> FastAPI:
                 # During a rollout an older web revision can meet a newer insights; it shows the cards it knows.
                 if item["number"] not in meta:
                     continue
+                card = meta[item["number"]]
                 result = ToolResult.model_validate(item["result"])
-                cards.append({"card": meta[item["number"]], "result": result.model_dump(mode="json")})
+                cards.append({"card": card, "result": result.model_dump(mode="json"), "views": views(card),
+                              "selected": default_view(card)})
         except (httpx.HTTPError, ValueError, KeyError) as exc:
             error = f"The insights service is not ready yet ({type(exc).__name__})."
         return page(request, "index.html", badge=info, cards=cards, error=error, examples=EXAMPLES,
                     max_chars=settings.question_max_chars)
+
+    @app.get("/card/{number}", response_class=HTMLResponse)
+    async def card_page(request: Request, number: int, v: int = 0) -> HTMLResponse:
+        """One card in another view, computed by its deterministic tool: no model involved."""
+        info = await badge()
+        card = by_number().get(number)
+        choices = views(card) if card else ()
+        if card is None or not 0 <= v < len(choices):
+            return page(request, "card.html", badge=info, item=None, error="There is no such question or view.",
+                        status_code=404)
+        try:
+            response = await client.post(f"/v1/tools/{card.tool}", json=choices[v].arguments)
+            response.raise_for_status()
+            result = ToolResult.model_validate(response.json())
+        except (httpx.HTTPError, ValueError) as exc:
+            return page(request, "card.html", badge=info, item=None,
+                        error=f"The insights service is not ready yet ({type(exc).__name__}).", status_code=503)
+        item = {"card": card, "result": result.model_dump(mode="json"), "views": choices, "selected": v}
+        return page(request, "card.html", badge=info, item=item, error="")
 
     @app.get("/api/cards")
     async def cards_api() -> JSONResponse:

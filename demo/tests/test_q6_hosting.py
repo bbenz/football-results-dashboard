@@ -91,6 +91,11 @@ def test_pooled_and_edition_results_have_stable_evidence_ids() -> None:
     assert "Across 2 host editions" in pooled.headline
     assert edition.table is not None
     assert edition.table.rows[0][0] == "Avalon"
+    assert {"q6.edition.avalon.performance", "q6.edition.avalon.non_host_mean",
+            "q6.edition.avalon.difference"} <= set(edition.evidence_ids)
+    assert edition.chart is not None
+    assert [s.name for s in edition.chart.series] == ["This edition", "Own non-host editions"]
+    assert "of 1 hosts did better" in edition.headline
 
 
 def test_gdp_split_uses_exact_or_alias_mapping_and_valid_from() -> None:

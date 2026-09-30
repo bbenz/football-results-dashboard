@@ -333,7 +333,7 @@ def run(raw: RawSource, storage: CuratedStorage, platform: str, work_dir: Path |
         finally:
             con.close()
         dq["version"] = version
-        (out / "data_quality.json").write_text(json.dumps(dq, indent=2, sort_keys=True), encoding="utf-8")
+        (out / "data_quality.json").write_text(json.dumps(dq, indent=2, sort_keys=True), encoding="utf-8", newline="\n")
         outputs = {name: {"sha256": _sha256(out / name), "bytes": (out / name).stat().st_size} for name in OUTPUTS}
         manifest = {
             "version": version,
@@ -345,7 +345,7 @@ def run(raw: RawSource, storage: CuratedStorage, platform: str, work_dir: Path |
             "dataset_label": dataset_label(report),
             "outputs": outputs,
         }
-        (out / MANIFEST).write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
+        (out / MANIFEST).write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8", newline="\n")
 
         existing = storage.read_manifest(version)
         reused = existing is not None

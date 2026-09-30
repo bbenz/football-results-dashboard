@@ -103,6 +103,27 @@ def test_data_page_and_trace_validation(apps) -> None:  # type: ignore[no-untype
     assert get(web, "/trace/" + "0" * 32).status_code == 200
 
 
+def test_every_card_view_renders_without_the_model(apps) -> None:  # type: ignore[no-untyped-def]
+    from football_insights.cards import CARDS, default_view, views
+
+    web, _ = apps
+    home = get(web, "/").text
+    assert home.count('class="views"') == len(CARDS)
+    request = 0
+    for card in CARDS:
+        choices = views(card)
+        assert choices[default_view(card)].arguments == card.arguments
+        for index, view in enumerate(choices):
+            request += 1  # a different client each time, so the per-client page limit doesn't apply
+            page = get(web, f"/card/{card.number}?v={index}", {"x-forwarded-for": f"198.51.100.{request}"})
+            assert page.status_code == 200, (card.number, view.label)
+            assert f"Q{card.number}" in page.text and "Tool call" in page.text
+    lens = [v.label for card in CARDS for v in views(card) if "(development lens)" in v.label]
+    assert len(lens) >= 7
+    assert get(web, "/card/9?v=0", {"x-forwarded-for": "198.51.100.250"}).status_code == 404
+    assert get(web, "/card/1?v=99", {"x-forwarded-for": "198.51.100.251"}).status_code == 404
+
+
 def test_insights_readiness_and_tools(apps) -> None:  # type: ignore[no-untyped-def]
     _, insights = apps
     assert get(insights, "/readyz").json()["ready"] is True

@@ -35,6 +35,7 @@ def _nice_ticks(low: float, high: float, count: int = 5) -> list[float]:
 
 
 def _fmt(value: float) -> str:
+    value += 0.0  # turns a negative zero into zero, so an axis never shows "-0"
     return f"{value:,.0f}" if abs(value) >= 100 or value == int(value) else f"{value:,.1f}"
 
 

@@ -45,6 +45,11 @@ button:hover, button:focus-visible { border-color: var(--accent); outline: none;
 .dim { color: var(--dim); }
 .bad { color: var(--bad); }
 .toolbar { margin: 1rem 0 0; }
+.views { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin: 0.5rem 0 0.2rem; }
+.views label { color: var(--dim); font-size: 0.9rem; }
+.views select { font: inherit; font-size: 1rem; color: var(--fg); background: #0f141b; border: 2px solid var(--line);
+                border-radius: 8px; padding: 0.3rem 0.5rem; max-width: 100%; }
+.views select:focus { border-color: var(--accent); outline: none; }
 
 details > summary { cursor: pointer; list-style: none; padding: 0.35rem 0; font-weight: 600; }
 details > summary::-webkit-details-marker { display: none; }

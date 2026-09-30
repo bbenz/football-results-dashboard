@@ -18,8 +18,8 @@
 #
 # Azure commands (not run by local setup)
 #   azure-foundation, azure-platform, upload-data, build-push, aks-deploy, aca-deploy,
-#   ingest-aks, ingest-aca, smoke, parity, load-test [aks|aca|both], rollout-v2,
-#   rollback, trace <id>, preflight, reset, allow-ip, switch-model <deployment>, teardown --dry-run
+#   ingest-aks, ingest-aca, smoke, parity, snapshot [aks|aca|both|local], load-test [aks|aca|both], rollout-v2,
+#   rollback [aks|aca|both], trace <id>, preflight, reset, allow-ip, switch-model <deployment>, teardown --dry-run
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/azure.sh"
@@ -116,13 +116,14 @@ HOOK
   ingest-aca) ingest_aca ;;
   smoke) smoke ;;
   parity) parity ;;
+  snapshot) snapshot "${1:-both}" ;;
   load-test)
     platform="${1:-both}"; shift || true; rps=20; seconds=60
     while [[ $# -gt 0 ]]; do case "$1" in --rps|-Rps) rps="${2:-20}"; shift 2 ;; --seconds|-Seconds) seconds="${2:-60}"; shift 2 ;; *) shift ;; esac; done
     load_test "$platform" "$rps" "$seconds"
     ;;
   rollout-v2) rollout_v2 ;;
-  rollback) rollback ;;
+  rollback) rollback "${1:-both}" ;;
   trace) trace_cmd "${1:-}" ;;
   preflight) preflight ;;
   reset) reset_demo ;;

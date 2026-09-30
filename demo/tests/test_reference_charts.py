@@ -3,8 +3,16 @@
 from __future__ import annotations
 
 from football_insights.charts import render
-from football_insights.reference import get_reference
+from football_insights.reference import FILES, REFERENCE_DIR, get_reference, load
 from football_insights.schemas import Chart, Series
+
+
+def test_reference_digest_ignores_line_endings_and_comments(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    # The curated version hashes this digest, so it must not depend on how a checkout stores line endings.
+    for name in FILES:
+        text = (REFERENCE_DIR / name).read_text(encoding="utf-8")
+        (tmp_path / name).write_bytes(("# a comment\n" + text).replace("\n", "\r\n").encode("utf-8"))
+    assert load(tmp_path).digest == get_reference().digest
 
 
 def test_reference_files_are_consistent() -> None:
@@ -37,3 +45,11 @@ def test_hbar_chart() -> None:
                   series=[Series(name="Rating", values=[2100.5, 1990.0])])
     svg = render(chart)
     assert "Avalon" in svg and "2,100" in svg
+
+
+def test_axis_crossing_zero_never_shows_negative_zero() -> None:
+    chart = Chart(kind="bar", title="Hosts", x=["Avalon", "Borealis", "Cascadia"], summary="s",
+                  series=[Series(name="This edition", values=[-0.11, 0.16, 0.11]),
+                          Series(name="Other editions", values=[-0.27, -0.14, -0.09])])
+    svg = render(chart)
+    assert ">-0<" not in svg and ">0<" in svg

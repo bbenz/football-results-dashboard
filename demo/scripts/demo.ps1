@@ -22,8 +22,8 @@
 
   Azure commands (not run by local setup)
     azure-foundation, azure-platform, upload-data, build-push, aks-deploy, aca-deploy,
-    ingest-aks, ingest-aca, smoke, parity, load-test [aks|aca|both], rollout-v2,
-    rollback, trace <id>, preflight, reset, allow-ip, switch-model <deployment>, teardown -DryRun
+    ingest-aks, ingest-aca, smoke, parity, snapshot [aks|aca|both|local], load-test [aks|aca|both], rollout-v2,
+    rollback [aks|aca|both], trace <id>, preflight, reset, allow-ip, switch-model <deployment>, teardown -DryRun
 
   Settings come from environment variables and the repository's .env (see .env.example).
 #>
@@ -123,9 +123,10 @@ switch ($Command) {
     'ingest-aca' { Invoke-IngestAca }
     'smoke' { Invoke-Smoke }
     'parity' { Invoke-Parity }
+    'snapshot' { Invoke-Snapshot -Platform $(if ($Rest.Count) { $Rest[0] } else { 'both' }) }
     'load-test' { Invoke-LoadTest -Platform $(if ($Rest.Count) { $Rest[0] } else { 'both' }) -Rps $Rps -Seconds $Seconds }
     'rollout-v2' { Invoke-RolloutV2 }
-    'rollback' { Invoke-Rollback }
+    'rollback' { Invoke-Rollback -Platform $(if ($Rest.Count) { $Rest[0] } else { 'both' }) }
     'trace' { Invoke-Trace -TraceId $(if ($Rest.Count) { $Rest[0] } else { '' }) }
     'preflight' { Invoke-Preflight }
     'reset' { Invoke-Reset }

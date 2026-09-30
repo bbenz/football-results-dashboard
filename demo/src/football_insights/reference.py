@@ -7,6 +7,7 @@ or indicator values, so they are committed and packaged into the images.
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import dataclass
 from functools import lru_cache
 from itertools import pairwise
@@ -90,10 +91,11 @@ def _read(name: str, directory: Path) -> Any:
 
 
 def load(directory: Path = REFERENCE_DIR) -> Reference:
+    # Hash the parsed content, so line endings, comments, and formatting never change the curated version.
     digest = hashlib.sha256()
     for name in FILES:
         digest.update(name.encode())
-        digest.update((directory / name).read_bytes())
+        digest.update(json.dumps(_read(name, directory), sort_keys=True, ensure_ascii=False, default=str).encode())
 
     tournaments = _read("tournaments.yaml", directory)
     categories = {

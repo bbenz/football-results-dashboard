@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block content %}
+<p><a href="/">&larr; All seven questions</a></p>
+{% if error %}<p class="notice">{{ error }}</p>{% endif %}
+{% if item %}{% include "_card.html" %}{% endif %}
+{% endblock %}

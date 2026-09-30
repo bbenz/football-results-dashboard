@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ..schemas import Cell, Chart, Fact, Series, Table, ToolResult
 from . import stats
-from .context import ToolContext
+from .context import ToolContext, slug
 from .ratings import RatedMatch
 
 TOOL_NAME = "hosting_effect"
@@ -532,13 +532,18 @@ def edition(ctx: ToolContext, params: Params) -> ToolResult:
             coverage=["No edition matched the requested filters."],
             caveats=["Samples are small, formats vary across editions, and there is no stage column."],
             cannot_tell="Whether hosting causes better results, or how a future host will do.",
-            method_version="q6-edition-v1",
+            method_version="q6-edition-v2",
             dataset_version=ctx.dataset_version,
             row_counts={"editions": len(editions)},
         )
 
     pair_lookup = {(p.tournament, p.year, p.host): p for p in pairs}
     rows: list[list[Cell]] = []
+    host_facts: list[Fact] = []
+    labels: list[str] = []
+    this_edition: list[float | None] = []
+    non_host: list[float | None] = []
+    diffs: list[tuple[float, str]] = []
     for host in sorted(selected.hosts):
         team = selected.teams[host]
         pair = pair_lookup.get((selected.tournament, selected.year, host))
@@ -555,6 +560,25 @@ def edition(ctx: ToolContext, params: Params) -> ToolResult:
                 _round(pair.performance_diff) if pair else None,
             ]
         )
+        prefix = f"q6.edition.{slug(host)}"
+        host_facts.extend([
+            Fact(id=f"{prefix}.matches", label=f"{host}: matches played", value=team.matches, unit="matches"),
+            Fact(id=f"{prefix}.wins", label=f"{host}: wins", value=team.wins),
+            Fact(id=f"{prefix}.performance", label=f"{host}: points per match above rating expectations, this edition",
+                 value=_round(team.performance), decimals=2),
+        ])
+        labels.append(host)
+        this_edition.append(_round(team.performance))
+        non_host.append(_round(pair.non_host_performance) if pair else None)
+        if pair:
+            host_facts.extend([
+                Fact(id=f"{prefix}.non_host_mean",
+                     label=f"{host}: points per match above rating expectations, own non-host editions",
+                     value=_round(pair.non_host_performance), decimals=2),
+                Fact(id=f"{prefix}.difference", label=f"{host}: host edition minus non-host editions",
+                     value=_round(pair.performance_diff), decimals=2),
+            ])
+            diffs.append((_round(pair.performance_diff), host))
     host_count = len(selected.hosts)
     facts = [
         Fact(id="q6.edition.hosts", label="Hosts", value=host_count),
@@ -563,7 +587,33 @@ def edition(ctx: ToolContext, params: Params) -> ToolResult:
         Fact(id="q6.edition.neutral_share", label="Neutral-match share", value=_round(100 * selected.neutral_share, 1),
              unit="%", decimals=1),
         Fact(id="q6.edition.venues", label="Venue identities", value=selected.venue_count),
+        *host_facts,
     ]
+    headline = (f"{selected.tournament} {selected.year} has {host_count} host teams and "
+                f"{len(selected.matches)} matches in this edition view.")
+    chart = None
+    if diffs:
+        better = sum(1 for diff, _ in diffs if diff > 0)
+        best_diff, best_host = max(diffs)
+        facts.append(Fact(id="q6.edition.hosts_better", label="Hosts that beat their own non-host editions",
+                          value=better))
+        facts.append(Fact(id="q6.edition.hosts_compared", label="Hosts with non-host editions to compare",
+                          value=len(diffs)))
+        headline = (f"At {selected.tournament} {selected.year}, {better} of {len(diffs)} hosts did better against "
+                    f"rating expectations than in their own non-host editions; {best_host} gained the most, "
+                    f"{best_diff:.2f} points per match.")
+        chart = Chart(
+            kind="bar",
+            title=f"Hosts at {selected.tournament} {selected.year} versus their non-host editions",
+            x=labels,
+            series=[Series(name="This edition", values=this_edition),
+                    Series(name="Own non-host editions", values=non_host)],
+            x_label="Host",
+            y_label="Points per match above rating expectations",
+            y_unit="points per match",
+            summary=(f"Bar chart of each host's points per match above rating expectations in this edition next to "
+                     f"its own non-host editions; {best_host} shows the largest gain, {best_diff:.2f}."),
+        )
     excluded_text = "included" if not selected.excluded_reasons else "excluded"
     return ToolResult(
         tool=TOOL_NAME,
@@ -571,10 +621,7 @@ def edition(ctx: ToolContext, params: Params) -> ToolResult:
         view="edition",
         params=params.model_dump(),
         title=f"{selected.tournament} {selected.year} hosts",
-        headline=(
-            f"{selected.tournament} {selected.year} has {host_count} host teams and "
-            f"{len(selected.matches)} matches in this edition view."
-        ),
+        headline=headline,
         facts=facts,
         table=Table(
             columns=[
@@ -590,12 +637,14 @@ def edition(ctx: ToolContext, params: Params) -> ToolResult:
             ],
             rows=rows,
         ),
-        chart=None,
-        method="Shows host-team records, rating-adjusted performance, and non-host comparisons where available.",
+        chart=chart,
+        method=("Shows host-team records and rating-adjusted performance (actual points per match minus the "
+                "expectation from pre-match ratings without the home bonus), compared with the same team's own "
+                "non-host editions of the tournament where it has any."),
         coverage=[f"This edition is {excluded_text} by the hosting filters."],
         caveats=["Samples are small, formats vary across editions, and there is no stage column."],
         cannot_tell="Whether hosting causes better results, or how a future host will do.",
-        method_version="q6-edition-v1",
+        method_version="q6-edition-v2",
         dataset_version=ctx.dataset_version,
         row_counts={"hosts": host_count, "matches": len(selected.matches)},
     )

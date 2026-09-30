@@ -23,20 +23,6 @@
 </div>
 
 {% for item in cards %}
-{% set c = item.card %}{% set r = item.result %}
-<section class="card" id="q{{ c.number }}">
-  <h2><span class="qn">Q{{ c.number }}</span> {{ c.question }}</h2>
-  <details class="explain">
-    <summary><span class="chev">&#9656;</span> About this question</summary>
-    <dl class="brief">
-      <dt>What is asked</dt><dd>{{ c.asks }}</dd>
-      <dt>Data and method</dt><dd>{{ c.data_method }}</dd>
-      <dt>What the result looks like</dt><dd>{{ c.expected }}</dd>
-      <dt>Why it matters</dt><dd>{{ c.why }}</dd>
-      {% if r.caveats %}<dt>Caveats</dt><dd><ul>{% for cv in r.caveats %}<li>{{ cv }}</li>{% endfor %}</ul></dd>{% endif %}
-    </dl>
-  </details>
-  {% include "_result.html" %}
-</section>
+{% include "_card.html" %}
 {% endfor %}
 {% endblock %}
