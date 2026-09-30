@@ -39,7 +39,7 @@ def _download(args: argparse.Namespace) -> int:
             print(f"download-data FAILED: {exc}", file=sys.stderr)
             return 1
         print(f"download-data: {key}: wrote {len(written)} files under {root}")
-    print("Next: python -m football_insights verify-data")
+    print("Next: demo verify")
     return 0
 
 
