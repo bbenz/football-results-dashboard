@@ -1,0 +1,86 @@
+# football-results-dashboard
+#
+# Rule zero: no dataset, derived data, extract, sample, or snapshot is ever
+# committed. Attendees download the data themselves; see data/README.md.
+#
+# Check any change to this file with:
+#   git check-ignore -v --no-index <path>
+# A directory-level ignore silently defeats file-level exceptions, which is why
+# data/ is ignored as "/data/*" rather than "/data/".
+
+# --- Raw data: everything under data/ except its two public documents --------
+/data/*
+!/data/README.md
+!/data/data sources.md
+
+# --- Tabular and derived data formats, anywhere -------------------------------
+*.csv
+*.tsv
+*.parquet
+*.duckdb*
+*.sqlite*
+*.db
+*.feather
+*.arrow
+*.avro
+*.orc
+*.zip
+*.gz
+*.7z
+*.xls
+*.xlsx
+*.pkl
+*.pickle
+*.npy
+*.npz
+*.h5
+*.hdf5
+*.ipynb
+
+# Narrow exception: small, clearly synthetic fixtures with fictional teams.
+!/demo/tests/fixtures/synthetic/*.csv
+
+# --- Local curated store, evidence, traces, replays, evaluation output --------
+/.local/
+traces/
+replay/
+eval-results/
+*.jsonl
+*.ndjson
+
+# --- Secrets and credentials ---------------------------------------------------
+.env*
+!.env.example
+kaggle.json
+.kaggle/
+*.pem
+*.pfx
+*.p12
+*.key
+.azure/
+.kube/
+kubeconfig*
+*.kubeconfig
+
+# --- Python and tooling ---------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.log
+
+# --- Operating system and editors ------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+*.swp
