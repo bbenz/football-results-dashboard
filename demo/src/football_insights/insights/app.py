@@ -15,14 +15,16 @@ import time
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from opentelemetry import trace
 from pydantic import BaseModel, Field
+from starlette.types import ASGIApp
 
 from ..agent.loop import InsightsAgent, QuestionRejected
 from ..analytics.context import ToolContext
 from ..analytics.registry import TOOLS, ToolError, function_tools, run_tool
+from ..asgi import LimitRequestBody
 from ..cards import CARDS
 from ..config import get_settings
 from ..runtime import describe
@@ -120,19 +122,12 @@ def traced_tool(ctx: ToolContext, name: str, arguments: dict[str, Any]) -> tuple
         return result, duration
 
 
-def create_app() -> FastAPI:
+def create_app() -> ASGIApp:
     settings = get_settings()
     configure("insights", settings)
     app = FastAPI(title="football-insights insights service", lifespan=lifespan, docs_url=None, redoc_url=None,
                   openapi_url=None)
     instrument_app(app)
-
-    @app.middleware("http")
-    async def bound_body(request: Request, call_next):
-        length = request.headers.get("content-length")
-        if length and int(length) > MAX_BODY_BYTES:
-            return JSONResponse({"detail": "request too large"}, status_code=413)
-        return await call_next(request)
 
     @app.get("/healthz")
     def healthz() -> dict[str, str]:
@@ -202,7 +197,7 @@ def create_app() -> FastAPI:
         spans = collector()
         return spans.get(trace_id) if spans else []
 
-    return app
+    return LimitRequestBody(app, MAX_BODY_BYTES)
 
 
 app = create_app()
@@ -212,7 +207,7 @@ def main() -> None:
     import uvicorn
 
     settings = get_settings()
-    uvicorn.run(app, host="0.0.0.0", port=settings.insights_port, log_config=None)  # noqa: S104
+    uvicorn.run(app, host=settings.bind_host, port=settings.insights_port, log_config=None)
 
 
 if __name__ == "__main__":

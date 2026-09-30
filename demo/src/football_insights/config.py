@@ -26,6 +26,7 @@ class Settings(BaseSettings):
 
     # Services
     insights_url: str = "http://localhost:8081"
+    bind_host: str = "127.0.0.1"
     web_port: int = 8080
     insights_port: int = 8081
     web_rate_limit_per_minute: int = 60

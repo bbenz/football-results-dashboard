@@ -36,8 +36,10 @@ COPY requirements-ingest.lock /tmp/requirements.lock
 RUN python -m venv /opt/venv && /opt/venv/bin/pip install --index-url "$PIP_INDEX_URL" --require-hashes -r /tmp/requirements.lock
 
 FROM base AS runtime
+# The services listen on every interface inside the container; run directly, they default to 127.0.0.1.
 ENV PATH=/opt/venv/bin:$PATH \
-    PYTHONPATH=/app
+    PYTHONPATH=/app \
+    BIND_HOST=0.0.0.0
 COPY src/football_insights /app/football_insights
 USER 10001
 

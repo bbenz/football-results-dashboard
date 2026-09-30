@@ -235,6 +235,6 @@ The evaluation suite (`demo/src/football_insights/evaluation/`) asks the agent t
 
 Among eligible deployments, the cheaper per answer serves the app, unless another is at least 5 percentage points more accurate at tool selection. The rule is fixed before the suite runs.
 
-**Running it.** With a Foundry project configured (see [SETUP.md](SETUP.md)), run `demo eval` to test in-process with your own sign-in, or `demo eval --target url --url <web URL>` to test a deployed endpoint. Use `--deployments`, `--repeats`, and `--category` to narrow a run. Reports go to `EVIDENCE_DIR/eval/` and contain metrics only, never answers.
+**Running it.** With a Foundry project configured (see [SETUP.md](SETUP.md)), run `demo eval` to test in-process with your own sign-in; `--deployments` picks the deployments to compare. `demo eval --target url --url <web URL> --deployments <serving deployment>` tests a deployed endpoint. The public API always answers with the deployment the endpoint is configured to serve, so to evaluate the other deployment there, run `demo switch-model` first; the suite stops if the answers come from a different deployment than requested. Use `--repeats` and `--category` to narrow a run. Reports go to `EVIDENCE_DIR/eval/` and contain metrics only, never answers.
 
 **Results.** The comparison of GPT-6 Astra and GPT-6 Sol, as metrics from repeated runs, is added here after the suite has run against both deployments.

@@ -4,6 +4,7 @@ nothing administrative is exposed, and the badge reports injected values only.""
 from __future__ import annotations
 
 import asyncio
+import json
 
 import httpx
 import pytest
@@ -170,6 +171,56 @@ def test_ask_rejects_bad_input_and_is_rate_limited(apps) -> None:  # type: ignor
     assert post(web, "/api/ask", content=b"not json", headers={"x-forwarded-for": "198.51.100.1"}).status_code == 400
     assert post(web, "/api/ask", content=b"not json", headers={"x-forwarded-for": "198.51.100.1"}).status_code == 429
     assert post(web, "/api/ask", content=b"not json", headers={"x-forwarded-for": "198.51.100.2"}).status_code == 400
+
+
+def test_public_requests_cannot_choose_or_join_a_trace(apps) -> None:  # type: ignore[no-untyped-def]
+    web, _ = apps
+    chosen = "ab" * 16
+    page = get(web, "/data", {"traceparent": f"00-{chosen}-{'cd' * 8}-01", "x-forwarded-for": "198.51.100.60"})
+    assert page.status_code == 200 and chosen not in page.text
+
+
+def test_request_bodies_are_bounded(apps) -> None:  # type: ignore[no-untyped-def]
+    web, _ = apps
+    big = post(web, "/api/ask", json={"question": "x" * 20_000}, headers={"x-forwarded-for": "198.51.100.61"})
+    assert big.status_code == 413 and big.headers["x-frame-options"] == "DENY"
+
+    async def chunks():  # type: ignore[no-untyped-def]
+        for _ in range(40):
+            yield b"x" * 1_000
+
+    chunked = post(web, "/api/ask", content=chunks(), headers={"x-forwarded-for": "198.51.100.62"})
+    assert chunked.status_code == 413
+    nested = post(web, "/api/ask", content=b"[" * 5_000 + b"]" * 5_000,
+                  headers={"content-type": "application/json", "x-forwarded-for": "198.51.100.63"})
+    assert nested.status_code == 400
+
+
+def test_public_api_cannot_pick_the_model_or_see_internal_errors(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    get_settings.cache_clear()
+    from football_insights.web import app as web_module
+
+    sent: list[dict[str, object]] = []
+
+    def insights(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1/ask":
+            sent.append(json.loads(request.content))
+            return httpx.Response(503, json={"detail": "curated store not loaded: blob https://internal.example"})
+        return httpx.Response(503, json={"detail": "not ready"})
+
+    web = web_module.create_app(client=httpx.AsyncClient(transport=httpx.MockTransport(insights),
+                                                         base_url="http://insights"))
+    response = post(web, "/api/ask", json={"question": "Who is best?", "deployment": "gpt-6-astra"})
+    get_settings.cache_clear()
+    assert sent == [{"question": "Who is best?"}]
+    assert response.status_code == 503 and "internal.example" not in response.text
+
+
+def test_services_listen_only_on_this_machine_unless_in_a_container() -> None:
+    from conftest import REPO_ROOT
+
+    assert get_settings().bind_host == "127.0.0.1"
+    assert "BIND_HOST=0.0.0.0" in (REPO_ROOT / "demo" / "docker" / "Dockerfile").read_text(encoding="utf-8")
 
 
 @pytest.mark.replay

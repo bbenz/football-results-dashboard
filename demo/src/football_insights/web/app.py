@@ -22,7 +22,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 from opentelemetry import trace
+from starlette.types import ASGIApp
 
+from ..asgi import IgnoreIncomingTraceContext, LimitRequestBody
 from ..cards import by_number, default_view, views
 from ..charts import render as render_chart
 from ..config import get_settings
@@ -32,6 +34,7 @@ from ..telemetry import collector, configure, instrument_app
 
 log = logging.getLogger("football_insights.web")
 HERE = Path(__file__).parent
+MAX_BODY_BYTES = 16_384
 EXAMPLES = (
     "Did hosting help Canada, Mexico, and the United States at the 2026 World Cup?",
     "Who is the best team of all time, and does the answer change with the definition?",
@@ -97,7 +100,7 @@ def answer_view(answer: Answer) -> dict[str, Any]:
             "primary": primary.model_dump(mode="json") if primary else None}
 
 
-def create_app(client: httpx.AsyncClient | None = None) -> FastAPI:
+def create_app(client: httpx.AsyncClient | None = None) -> ASGIApp:
     settings = get_settings()
     configure("web", settings)
     client = client or httpx.AsyncClient(base_url=settings.insights_url, timeout=httpx.Timeout(10.0, read=90.0))
@@ -223,14 +226,15 @@ def create_app(client: httpx.AsyncClient | None = None) -> FastAPI:
         versions = sorted({item["result"]["dataset_version"] for item in items})
         return JSONResponse({"dataset_versions": versions, "cards": items})
 
-    async def ask_insights(question: str, deployment: str | None = None) -> tuple[int, dict[str, Any]]:
+    async def ask_insights(question: str) -> tuple[int, dict[str, Any]]:
+        # The public API never picks the model deployment: that is operator configuration (switch-model).
         payload: dict[str, Any] = {"question": question[: settings.question_max_chars * 2]}
-        if deployment:
-            payload["deployment"] = deployment
         try:
             response = await client.post("/v1/ask", json=payload)
         except httpx.HTTPError as exc:
             return 503, {"detail": f"The insights service is unreachable ({type(exc).__name__})."}
+        if response.status_code >= 500:
+            return response.status_code, {"detail": "The insights service isn't ready yet. Try again in a moment."}
         if response.status_code != 200:
             detail = response.json().get("detail", response.text) if response.headers.get(
                 "content-type", "").startswith("application/json") else response.text
@@ -254,12 +258,11 @@ def create_app(client: httpx.AsyncClient | None = None) -> FastAPI:
     async def ask_api(request: Request) -> JSONResponse:
         try:
             body = await request.json()
-        except ValueError:
+        except (ValueError, RecursionError):
             return JSONResponse({"detail": "send JSON: {\"question\": \"...\"}"}, status_code=400)
         if not isinstance(body, dict) or not isinstance(body.get("question"), str):
             return JSONResponse({"detail": "send JSON: {\"question\": \"...\"}"}, status_code=400)
-        deployment = body.get("deployment") if isinstance(body.get("deployment"), str) else None
-        status, answer = await ask_insights(body["question"], deployment)
+        status, answer = await ask_insights(body["question"])
         return JSONResponse(answer, status_code=status)
 
     @app.get("/data", response_class=HTMLResponse)
@@ -294,7 +297,7 @@ def create_app(client: httpx.AsyncClient | None = None) -> FastAPI:
         return page(request, "trace.html", badge=info, spans=spans, target=trace_id, total_ms=round(total, 1),
                     error="" if spans else "No spans for this trace are held in memory by web or insights.")
 
-    return app
+    return IgnoreIncomingTraceContext(LimitRequestBody(app, MAX_BODY_BYTES, SECURITY_HEADERS.items()))
 
 
 app = create_app()
@@ -304,7 +307,7 @@ def main() -> None:
     import uvicorn
 
     settings = get_settings()
-    uvicorn.run(app, host="0.0.0.0", port=settings.web_port, log_config=None)  # noqa: S104
+    uvicorn.run(app, host=settings.bind_host, port=settings.web_port, log_config=None)
 
 
 if __name__ == "__main__":
