@@ -1,0 +1,345 @@
+# Team -> World Bank WDI economy crosswalk (hand-reviewed reference data; names and codes only).
+# match: exact | alias | shared (several teams share one economy) | none (no WDI economy; see reason)
+# shared mappings support region and income-group lenses only, never per-capita values.
+# valid_from: first year the mapping applies; earlier matches are unmapped for development joins.
+# Teams missing from this file are reported as unmapped by ingest; nothing is dropped silently.
+schema_version: 1
+reviewed: 2026-09-29
+teams:
+  - {team: "Abkhazia", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Afghanistan", wdi: AFG, match: exact}
+  - {team: "Albania", wdi: ALB, match: exact}
+  - {team: "Alderney", wdi: CHI, match: shared, note: "WDI reports the Channel Islands as one economy. Use region and income group only, never per-capita values."}
+  - {team: "Algeria", wdi: DZA, match: exact}
+  - {team: "Ambazonia", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "American Samoa", wdi: ASM, match: exact}
+  - {team: "Andalusia", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Andorra", wdi: AND, match: exact}
+  - {team: "Angola", wdi: AGO, match: exact}
+  - {team: "Anguilla", wdi: null, match: none, reason: territory_not_in_wdi, note: "Territory that WDI does not report separately."}
+  - {team: "Antigua and Barbuda", wdi: ATG, match: exact}
+  - {team: "Arameans Suryoye", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Argentina", wdi: ARG, match: exact}
+  - {team: "Armenia", wdi: ARM, match: exact}
+  - {team: "Artsakh", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Aruba", wdi: ABW, match: exact}
+  - {team: "Asturias", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Australia", wdi: AUS, match: exact}
+  - {team: "Austria", wdi: AUT, match: exact}
+  - {team: "Aymara", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Azerbaijan", wdi: AZE, match: exact}
+  - {team: "Bahamas", wdi: BHS, match: alias}
+  - {team: "Bahrain", wdi: BHR, match: exact}
+  - {team: "Bangladesh", wdi: BGD, match: exact}
+  - {team: "Barawa", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Barbados", wdi: BRB, match: exact}
+  - {team: "Basque Country", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Belarus", wdi: BLR, match: exact}
+  - {team: "Belgium", wdi: BEL, match: exact}
+  - {team: "Belize", wdi: BLZ, match: exact}
+  - {team: "Benin", wdi: BEN, match: exact}
+  - {team: "Bermuda", wdi: BMU, match: exact}
+  - {team: "Bhutan", wdi: BTN, match: exact}
+  - {team: "Biafra", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Bolivia", wdi: BOL, match: exact}
+  - {team: "Bonaire", wdi: null, match: none, reason: territory_not_in_wdi, note: "Territory that WDI does not report separately."}
+  - {team: "Bosnia and Herzegovina", wdi: BIH, match: exact}
+  - {team: "Botswana", wdi: BWA, match: exact}
+  - {team: "Brazil", wdi: BRA, match: exact}
+  - {team: "British Virgin Islands", wdi: VGB, match: exact}
+  - {team: "Brittany", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Brunei", wdi: BRN, match: alias}
+  - {team: "Bulgaria", wdi: BGR, match: exact}
+  - {team: "Burkina Faso", wdi: BFA, match: exact}
+  - {team: "Burundi", wdi: BDI, match: exact}
+  - {team: "Cambodia", wdi: KHM, match: exact}
+  - {team: "Cameroon", wdi: CMR, match: exact}
+  - {team: "Canada", wdi: CAN, match: exact}
+  - {team: "Canary Islands", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Canton Ticino", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Cape Verde", wdi: CPV, match: alias}
+  - {team: "Cascadia", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Catalonia", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Cayman Islands", wdi: CYM, match: exact}
+  - {team: "Central African Republic", wdi: CAF, match: exact}
+  - {team: "Central Spain", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Chad", wdi: TCD, match: exact}
+  - {team: "Chagos Islands", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Chameria", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Chechnya", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Chile", wdi: CHL, match: exact}
+  - {team: "China", wdi: CHN, match: exact}
+  - {team: "Cilento", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Colombia", wdi: COL, match: exact}
+  - {team: "Comoros", wdi: COM, match: exact}
+  - {team: "Congo", wdi: COG, match: alias}
+  - {team: "Cook Islands", wdi: null, match: none, reason: territory_not_in_wdi, note: "Territory that WDI does not report separately."}
+  - {team: "Corsica", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Costa Rica", wdi: CRI, match: exact}
+  - {team: "County of Nice", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Crimea", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Croatia", wdi: HRV, match: exact}
+  - {team: "Cuba", wdi: CUB, match: exact}
+  - {team: "Curaçao", wdi: CUW, match: exact}
+  - {team: "Cyprus", wdi: CYP, match: exact}
+  - {team: "Czech Republic", wdi: CZE, match: exact}
+  - {team: "Czechoslovakia", wdi: null, match: none, reason: historical, note: "Defunct state team; WDI has no entity for it."}
+  - {team: "DR Congo", wdi: COD, match: alias}
+  - {team: "Darfur", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Denmark", wdi: DNK, match: exact}
+  - {team: "Djibouti", wdi: DJI, match: exact}
+  - {team: "Dominica", wdi: DMA, match: exact}
+  - {team: "Dominican Republic", wdi: DOM, match: exact}
+  - {team: "Donetsk PR", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Délvidék", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "East Turkestan", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Ecuador", wdi: ECU, match: exact}
+  - {team: "Egypt", wdi: EGY, match: alias}
+  - {team: "El Salvador", wdi: SLV, match: exact}
+  - {team: "Elba Island", wdi: null, match: none, reason: subnational, note: "Island or municipal team inside a larger economy; not an economy in WDI."}
+  - {team: "Ellan Vannin", wdi: IMN, match: alias, note: "CONIFA team of the Isle of Man; shares IMN with the Isle of Man island-games team."}
+  - {team: "England", wdi: GBR, match: shared, note: "One of four UK football associations; WDI reports only the United Kingdom. Use region and income group only, never per-capita values."}
+  - {team: "Equatorial Guinea", wdi: GNQ, match: exact}
+  - {team: "Eritrea", wdi: ERI, match: exact}
+  - {team: "Estonia", wdi: EST, match: exact}
+  - {team: "Eswatini", wdi: SWZ, match: exact}
+  - {team: "Ethiopia", wdi: ETH, match: exact}
+  - {team: "Falkland Islands", wdi: null, match: none, reason: territory_not_in_wdi, note: "Territory that WDI does not report separately."}
+  - {team: "Faroe Islands", wdi: FRO, match: exact}
+  - {team: "Felvidék", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Fiji", wdi: FJI, match: exact}
+  - {team: "Finland", wdi: FIN, match: exact}
+  - {team: "France", wdi: FRA, match: exact}
+  - {team: "Franconia", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "French Guiana", wdi: null, match: none, reason: territory_not_in_wdi, note: "Territory that WDI does not report separately."}
+  - {team: "Frøya", wdi: null, match: none, reason: subnational, note: "Island or municipal team inside a larger economy; not an economy in WDI."}
+  - {team: "Gabon", wdi: GAB, match: exact}
+  - {team: "Galicia", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Gambia", wdi: GMB, match: alias}
+  - {team: "Georgia", wdi: GEO, match: exact}
+  - {team: "German DR", wdi: null, match: none, reason: historical, note: "Defunct state team; WDI has no entity for it."}
+  - {team: "Germany", wdi: DEU, match: exact, note: "Includes West Germany before 1990, as the dataset does; WDI Germany series are unified-Germany values."}
+  - {team: "Ghana", wdi: GHA, match: exact}
+  - {team: "Gibraltar", wdi: GIB, match: exact}
+  - {team: "Gotland", wdi: null, match: none, reason: subnational, note: "Island or municipal team inside a larger economy; not an economy in WDI."}
+  - {team: "Gozo", wdi: null, match: none, reason: subnational, note: "Island or municipal team inside a larger economy; not an economy in WDI."}
+  - {team: "Greece", wdi: GRC, match: exact}
+  - {team: "Greenland", wdi: GRL, match: exact}
+  - {team: "Grenada", wdi: GRD, match: exact}
+  - {team: "Guadeloupe", wdi: null, match: none, reason: territory_not_in_wdi, note: "Territory that WDI does not report separately."}
+  - {team: "Guam", wdi: GUM, match: exact}
+  - {team: "Guatemala", wdi: GTM, match: exact}
+  - {team: "Guernsey", wdi: CHI, match: shared, note: "WDI reports the Channel Islands as one economy. Use region and income group only, never per-capita values."}
+  - {team: "Guinea", wdi: GIN, match: exact}
+  - {team: "Guinea-Bissau", wdi: GNB, match: exact}
+  - {team: "Guyana", wdi: GUY, match: exact}
+  - {team: "Găgăuzia", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Haiti", wdi: HTI, match: exact}
+  - {team: "Hitra", wdi: null, match: none, reason: subnational, note: "Island or municipal team inside a larger economy; not an economy in WDI."}
+  - {team: "Hmong", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Honduras", wdi: HND, match: exact}
+  - {team: "Hong Kong", wdi: HKG, match: alias}
+  - {team: "Hungary", wdi: HUN, match: exact}
+  - {team: "Iceland", wdi: ISL, match: exact}
+  - {team: "India", wdi: IND, match: exact}
+  - {team: "Indonesia", wdi: IDN, match: exact}
+  - {team: "Iran", wdi: IRN, match: alias}
+  - {team: "Iraq", wdi: IRQ, match: exact}
+  - {team: "Iraqi Kurdistan", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Isle of Man", wdi: IMN, match: exact}
+  - {team: "Isle of Wight", wdi: null, match: none, reason: subnational, note: "Island or municipal team inside a larger economy; not an economy in WDI."}
+  - {team: "Israel", wdi: ISR, match: exact}
+  - {team: "Italy", wdi: ITA, match: exact}
+  - {team: "Ivory Coast", wdi: CIV, match: alias}
+  - {team: "Jamaica", wdi: JAM, match: exact}
+  - {team: "Japan", wdi: JPN, match: exact}
+  - {team: "Jersey", wdi: CHI, match: shared, note: "WDI reports the Channel Islands as one economy. Use region and income group only, never per-capita values."}
+  - {team: "Jordan", wdi: JOR, match: exact}
+  - {team: "Kabylia", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Kazakhstan", wdi: KAZ, match: exact}
+  - {team: "Kenya", wdi: KEN, match: exact}
+  - {team: "Kernow", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Kiribati", wdi: KIR, match: exact}
+  - {team: "Kosovo", wdi: XKX, match: exact}
+  - {team: "Kurdistan", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Kuwait", wdi: KWT, match: exact}
+  - {team: "Kyrgyzstan", wdi: KGZ, match: alias}
+  - {team: "Kárpátalja", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Laos", wdi: LAO, match: alias}
+  - {team: "Latvia", wdi: LVA, match: exact}
+  - {team: "Lebanon", wdi: LBN, match: exact}
+  - {team: "Lesotho", wdi: LSO, match: exact}
+  - {team: "Liberia", wdi: LBR, match: exact}
+  - {team: "Libya", wdi: LBY, match: exact}
+  - {team: "Liechtenstein", wdi: LIE, match: exact}
+  - {team: "Lithuania", wdi: LTU, match: exact}
+  - {team: "Luhansk PR", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Luxembourg", wdi: LUX, match: exact}
+  - {team: "Macau", wdi: MAC, match: alias}
+  - {team: "Madagascar", wdi: MDG, match: exact}
+  - {team: "Madrid", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Malawi", wdi: MWI, match: exact}
+  - {team: "Malaysia", wdi: MYS, match: exact}
+  - {team: "Maldives", wdi: MDV, match: exact}
+  - {team: "Mali", wdi: MLI, match: exact}
+  - {team: "Malta", wdi: MLT, match: exact}
+  - {team: "Manchukuo", wdi: null, match: none, reason: historical, note: "Defunct state team; WDI has no entity for it."}
+  - {team: "Mapuche", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Marshall Islands", wdi: MHL, match: exact}
+  - {team: "Martinique", wdi: null, match: none, reason: territory_not_in_wdi, note: "Territory that WDI does not report separately."}
+  - {team: "Matabeleland", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Maule Sur", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Mauritania", wdi: MRT, match: exact}
+  - {team: "Mauritius", wdi: MUS, match: exact}
+  - {team: "Mayotte", wdi: null, match: none, reason: territory_not_in_wdi, note: "Territory that WDI does not report separately."}
+  - {team: "Menorca", wdi: null, match: none, reason: subnational, note: "Island or municipal team inside a larger economy; not an economy in WDI."}
+  - {team: "Mexico", wdi: MEX, match: exact}
+  - {team: "Micronesia", wdi: FSM, match: alias}
+  - {team: "Moldova", wdi: MDA, match: exact}
+  - {team: "Monaco", wdi: MCO, match: exact}
+  - {team: "Mongolia", wdi: MNG, match: exact}
+  - {team: "Montenegro", wdi: MNE, match: exact}
+  - {team: "Montserrat", wdi: null, match: none, reason: territory_not_in_wdi, note: "Territory that WDI does not report separately."}
+  - {team: "Morocco", wdi: MAR, match: exact}
+  - {team: "Mozambique", wdi: MOZ, match: exact}
+  - {team: "Myanmar", wdi: MMR, match: exact}
+  - {team: "Namibia", wdi: NAM, match: exact}
+  - {team: "Nepal", wdi: NPL, match: exact}
+  - {team: "Netherlands", wdi: NLD, match: exact}
+  - {team: "New Caledonia", wdi: NCL, match: exact}
+  - {team: "New Zealand", wdi: NZL, match: exact}
+  - {team: "Nicaragua", wdi: NIC, match: exact}
+  - {team: "Niger", wdi: NER, match: exact}
+  - {team: "Nigeria", wdi: NGA, match: exact}
+  - {team: "Niue", wdi: null, match: none, reason: territory_not_in_wdi, note: "Territory that WDI does not report separately."}
+  - {team: "North Korea", wdi: PRK, match: alias}
+  - {team: "North Macedonia", wdi: MKD, match: exact}
+  - {team: "North Vietnam", wdi: null, match: none, reason: historical, note: "Defunct state team; WDI has no entity for it."}
+  - {team: "Northern Cyprus", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Northern Ireland", wdi: GBR, match: shared, note: "One of four UK football associations; WDI reports only the United Kingdom. Use region and income group only, never per-capita values."}
+  - {team: "Northern Mariana Islands", wdi: MNP, match: exact}
+  - {team: "Norway", wdi: NOR, match: exact}
+  - {team: "Occitania", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Oman", wdi: OMN, match: exact}
+  - {team: "Orkney", wdi: null, match: none, reason: subnational, note: "Island or municipal team inside a larger economy; not an economy in WDI."}
+  - {team: "Padania", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Pakistan", wdi: PAK, match: exact}
+  - {team: "Palau", wdi: PLW, match: exact}
+  - {team: "Palestine", wdi: PSE, match: alias}
+  - {team: "Panama", wdi: PAN, match: exact}
+  - {team: "Panjab", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Papua New Guinea", wdi: PNG, match: exact}
+  - {team: "Paraguay", wdi: PRY, match: exact}
+  - {team: "Parishes of Jersey", wdi: null, match: none, reason: subnational, note: "Island or municipal team inside a larger economy; not an economy in WDI."}
+  - {team: "Peru", wdi: PER, match: exact}
+  - {team: "Philippines", wdi: PHL, match: exact}
+  - {team: "Poland", wdi: POL, match: exact}
+  - {team: "Portugal", wdi: PRT, match: exact}
+  - {team: "Provence", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Puerto Rico", wdi: PRI, match: alias}
+  - {team: "Qatar", wdi: QAT, match: exact}
+  - {team: "Quebec", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Raetia", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Republic of Ireland", wdi: IRL, match: alias}
+  - {team: "Republic of St. Pauli", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Rhodes", wdi: null, match: none, reason: subnational, note: "Island or municipal team inside a larger economy; not an economy in WDI."}
+  - {team: "Romani people", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Romania", wdi: ROU, match: exact}
+  - {team: "Rouet-Provence", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Russia", wdi: RUS, match: alias, valid_from: 1992, note: "Matches before 1992 are the Soviet Union era (391 matches from 1910); no WDI entity, so they are unmapped."}
+  - {team: "Rwanda", wdi: RWA, match: exact}
+  - {team: "Ryūkyū", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Réunion", wdi: null, match: none, reason: territory_not_in_wdi, note: "Territory that WDI does not report separately."}
+  - {team: "Saare County", wdi: null, match: none, reason: subnational, note: "Island or municipal team inside a larger economy; not an economy in WDI."}
+  - {team: "Saarland", wdi: null, match: none, reason: historical, note: "Defunct state team; WDI has no entity for it."}
+  - {team: "Saint Barthélemy", wdi: null, match: none, reason: territory_not_in_wdi, note: "Territory that WDI does not report separately."}
+  - {team: "Saint Helena", wdi: null, match: none, reason: territory_not_in_wdi, note: "Territory that WDI does not report separately."}
+  - {team: "Saint Kitts and Nevis", wdi: KNA, match: alias}
+  - {team: "Saint Lucia", wdi: LCA, match: alias}
+  - {team: "Saint Martin", wdi: MAF, match: alias}
+  - {team: "Saint Pierre and Miquelon", wdi: null, match: none, reason: territory_not_in_wdi, note: "Territory that WDI does not report separately."}
+  - {team: "Saint Vincent and the Grenadines", wdi: VCT, match: alias}
+  - {team: "Samoa", wdi: WSM, match: exact}
+  - {team: "San Marino", wdi: SMR, match: exact}
+  - {team: "Sark", wdi: CHI, match: shared, note: "WDI reports the Channel Islands as one economy. Use region and income group only, never per-capita values."}
+  - {team: "Saudi Arabia", wdi: SAU, match: exact}
+  - {team: "Saugeais", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Scotland", wdi: GBR, match: shared, note: "One of four UK football associations; WDI reports only the United Kingdom. Use region and income group only, never per-capita values."}
+  - {team: "Sealand", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Seborga", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Senegal", wdi: SEN, match: exact}
+  - {team: "Serbia", wdi: SRB, match: exact, note: "Includes FR Yugoslavia (1994-2003) and Serbia and Montenegro (2003-2006) per former_names.csv."}
+  - {team: "Seychelles", wdi: SYC, match: exact}
+  - {team: "Shetland", wdi: null, match: none, reason: subnational, note: "Island or municipal team inside a larger economy; not an economy in WDI."}
+  - {team: "Sierra Leone", wdi: SLE, match: exact}
+  - {team: "Silesia", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Singapore", wdi: SGP, match: exact}
+  - {team: "Sint Maarten", wdi: SXM, match: alias}
+  - {team: "Slovakia", wdi: SVK, match: alias}
+  - {team: "Slovenia", wdi: SVN, match: exact}
+  - {team: "Solomon Islands", wdi: SLB, match: exact}
+  - {team: "Somalia", wdi: SOM, match: alias}
+  - {team: "Somaliland", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "South Africa", wdi: ZAF, match: exact}
+  - {team: "South Korea", wdi: KOR, match: alias}
+  - {team: "South Ossetia", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "South Sudan", wdi: SSD, match: exact}
+  - {team: "South Yemen", wdi: null, match: none, reason: historical, note: "Defunct state team; WDI has no entity for it."}
+  - {team: "Spain", wdi: ESP, match: exact}
+  - {team: "Sri Lanka", wdi: LKA, match: exact}
+  - {team: "Sudan", wdi: SDN, match: exact}
+  - {team: "Suriname", wdi: SUR, match: exact}
+  - {team: "Surrey", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Sweden", wdi: SWE, match: exact}
+  - {team: "Switzerland", wdi: CHE, match: exact}
+  - {team: "Syria", wdi: SYR, match: alias}
+  - {team: "Székely Land", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Sápmi", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "São Tomé and Príncipe", wdi: STP, match: alias}
+  - {team: "Tahiti", wdi: PYF, match: alias, note: "The Tahiti team represents French Polynesia, which WDI reports as PYF."}
+  - {team: "Taiwan", wdi: null, match: none, reason: not_in_wdi, note: "WDI publishes no data for Taiwan."}
+  - {team: "Tajikistan", wdi: TJK, match: exact}
+  - {team: "Tamil Eelam", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Tanzania", wdi: TZA, match: exact}
+  - {team: "Thailand", wdi: THA, match: exact}
+  - {team: "Tibet", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Timor-Leste", wdi: TLS, match: exact}
+  - {team: "Togo", wdi: TGO, match: exact}
+  - {team: "Tonga", wdi: TON, match: exact}
+  - {team: "Trinidad and Tobago", wdi: TTO, match: exact}
+  - {team: "Tunisia", wdi: TUN, match: exact}
+  - {team: "Turkey", wdi: TUR, match: alias}
+  - {team: "Turkmenistan", wdi: TKM, match: exact}
+  - {team: "Turks and Caicos Islands", wdi: TCA, match: exact}
+  - {team: "Tuvalu", wdi: TUV, match: exact}
+  - {team: "Two Sicilies", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Uganda", wdi: UGA, match: exact}
+  - {team: "Ukraine", wdi: UKR, match: exact}
+  - {team: "United Arab Emirates", wdi: ARE, match: exact}
+  - {team: "United Koreans in Japan", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "United States", wdi: USA, match: exact}
+  - {team: "United States Virgin Islands", wdi: VIR, match: alias}
+  - {team: "Uruguay", wdi: URY, match: exact}
+  - {team: "Uzbekistan", wdi: UZB, match: exact}
+  - {team: "Vanuatu", wdi: VUT, match: exact}
+  - {team: "Vatican City", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Venezuela", wdi: VEN, match: alias}
+  - {team: "Vietnam", wdi: VNM, match: alias}
+  - {team: "Vietnam Republic", wdi: null, match: none, reason: historical, note: "Defunct state team; WDI has no entity for it."}
+  - {team: "Wales", wdi: GBR, match: shared, note: "One of four UK football associations; WDI reports only the United Kingdom. Use region and income group only, never per-capita values."}
+  - {team: "Wallis Islands and Futuna", wdi: null, match: none, reason: territory_not_in_wdi, note: "Territory that WDI does not report separately."}
+  - {team: "West Papua", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Western Armenia", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Western Australia", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Western Isles", wdi: null, match: none, reason: subnational, note: "Island or municipal team inside a larger economy; not an economy in WDI."}
+  - {team: "Western Sahara", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Yemen", wdi: YEM, match: alias, note: "Successor of North Yemen (Yemen AR); South Yemen (Yemen DPR) is a separate historical team."}
+  - {team: "Yemen DPR", wdi: null, match: none, reason: historical, note: "Defunct state team; WDI has no entity for it."}
+  - {team: "Ynys Môn", wdi: null, match: none, reason: subnational, note: "Island or municipal team inside a larger economy; not an economy in WDI."}
+  - {team: "Yorkshire", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Yoruba Nation", wdi: null, match: none, reason: non_fifa, note: "Regional, diaspora, or unrecognized-state team outside FIFA; not an economy in WDI."}
+  - {team: "Yugoslavia", wdi: null, match: none, reason: historical, note: "Defunct state team; WDI has no entity for it."}
+  - {team: "Zambia", wdi: ZMB, match: exact}
+  - {team: "Zanzibar", wdi: null, match: none, reason: territory_not_in_wdi, note: "Territory that WDI does not report separately."}
+  - {team: "Zimbabwe", wdi: ZWE, match: exact}
+  - {team: "Åland Islands", wdi: null, match: none, reason: territory_not_in_wdi, note: "Territory that WDI does not report separately."}

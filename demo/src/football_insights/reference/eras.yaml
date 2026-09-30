@@ -1,0 +1,16 @@
+# Era boundaries for question 2 and era-level views (hand-authored definitions).
+#
+# Eras are contiguous so that every match belongs to exactly one era. Boundaries
+# follow structural breaks in the international game: the First World War, the
+# resumption of play after the Second World War, the 1970s growth of continental
+# competition, the post-1990 expansion as new states joined, and the modern
+# calendar. They are a choice, not a finding; docs/METHODS.md says so.
+schema_version: 1
+reviewed: 2026-09-29
+eras:
+  - {id: early,     start: 1872, end: 1914, label: "1872–1914", min_matches: 10, note: "Few teams; British Home Nations play most matches."}
+  - {id: interwar,  start: 1915, end: 1945, label: "1915–1945", min_matches: 15, note: "Includes both world wars; the World Cup begins in 1930."}
+  - {id: postwar,   start: 1946, end: 1969, label: "1946–1969", min_matches: 20, note: "Continental championships spread; decolonization adds teams."}
+  - {id: expansion, start: 1970, end: 1989, label: "1970–1989", min_matches: 20, note: "Larger tournaments and more qualifiers."}
+  - {id: modern,    start: 1990, end: 2009, label: "1990–2009", min_matches: 20, note: "New states after 1991; the number of active teams jumps."}
+  - {id: current,   start: 2010, end: 2026, label: "2010–2026", min_matches: 20, note: "Nations leagues and FIFA Series reshape the calendar."}

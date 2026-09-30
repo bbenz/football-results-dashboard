@@ -1,0 +1,31 @@
+# Venue and team lineage (hand-reviewed reference data; names and years only).
+#
+# results.csv names every team by its current name, while `country` is the venue's
+# name at the time of the match. former_names.csv reconciles most venue names; the
+# aliases below cover the venue names it does not. Venue names are matched by name:
+# the date ranges in former_names.csv describe team names and are not enforced for
+# venues (Malaya, Ceylon, and Irish Free State appear slightly outside them).
+schema_version: 1
+reviewed: 2026-09-29
+
+venue_aliases:
+  - {venue: "Manchuria", team: "Manchukuo", note: "Xinjing (now Changchun), 1939-1942; Manchukuo played its home matches there."}
+  - {venue: "Yemen AR", team: "Yemen", note: "North Yemen; the Yemen team is its successor in this dataset."}
+
+# Teams that stopped playing because their state dissolved, merged, or split.
+# Question 4 uses this to label exits and entries; it never merges match records.
+successions:
+  - {team: "Czechoslovakia", last_year: 1993, successors: ["Czech Republic", "Slovakia"], event: "Split into two states (1993)."}
+  - {team: "Yugoslavia", last_year: 1992, successors: ["Serbia", "Croatia", "Slovenia", "Bosnia and Herzegovina", "North Macedonia", "Montenegro"], event: "Dissolution (1991-1992); Serbia continues as FR Yugoslavia in former_names.csv."}
+  - {team: "German DR", last_year: 1990, successors: ["Germany"], event: "German reunification (1990)."}
+  - {team: "Saarland", last_year: 1956, successors: ["Germany"], event: "Saar joined West Germany (1957)."}
+  - {team: "Vietnam Republic", last_year: 1975, successors: ["Vietnam"], event: "Reunification of Vietnam (1976)."}
+  - {team: "North Vietnam", last_year: 1970, successors: ["Vietnam"], event: "Reunification of Vietnam (1976)."}
+  - {team: "Yemen DPR", last_year: 1989, successors: ["Yemen"], event: "Yemeni unification (1990)."}
+  - {team: "South Yemen", last_year: 1982, successors: ["Yemen"], event: "Yemeni unification (1990)."}
+  - {team: "Manchukuo", last_year: 1942, successors: [], event: "State ended in 1945."}
+
+# The dataset records the Soviet Union under the current name Russia (former_names.csv),
+# so 391 matches from 1910 to 1991 sit under Russia. These teams played their first or
+# first-since-1991 matches as independent states after the dissolution.
+post_soviet_states: ["Armenia", "Azerbaijan", "Belarus", "Estonia", "Georgia", "Kazakhstan", "Kyrgyzstan", "Latvia", "Lithuania", "Moldova", "Tajikistan", "Turkmenistan", "Ukraine", "Uzbekistan"]
