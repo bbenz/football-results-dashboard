@@ -305,7 +305,22 @@ function Invoke-AcaDeploy {
     } finally {
         if ($null -eq $old) { Remove-Item Env:ACA_DEPLOY_APPS -ErrorAction SilentlyContinue } else { $env:ACA_DEPLOY_APPS = $old }
     }
+    [void](Invoke-AcaRetireIdleRevisions)
     Write-Host "ACA web: $(Get-AcaWebUrl)"
+}
+function Invoke-AcaRetireIdleRevisions {
+    # web runs in multiple-revision mode for the v2 traffic split, so earlier revisions keep running at 0% traffic,
+    # each holding a replica. Deactivate them; they stay in the revision history and can be reactivated.
+    $rg = Get-RequiredEnv 'AZURE_RESOURCE_GROUP'
+    $web = Get-RequiredEnv 'ACA_WEB_APP_NAME'
+    $revisions = az containerapp revision list --resource-group $rg --name $web -o json | ConvertFrom-Json
+    if ($LASTEXITCODE -ne 0) { throw 'Could not list ACA web revisions.' }
+    $idle = @($revisions | Where-Object { $_.properties.active -and $_.properties.trafficWeight -eq 0 })
+    foreach ($revision in $idle) {
+        Invoke-AzChecked containerapp revision deactivate --resource-group $rg --name $web --revision $revision.name --output none
+        Write-Host "Deactivated idle ACA web revision $($revision.name)."
+    }
+    return $idle.Count
 }
 function Get-AcaWebUrl {
     if ($env:ACA_WEB_URL) { return $env:ACA_WEB_URL }
@@ -380,6 +395,16 @@ function Invoke-Smoke {
     Test-InsightsIsolation
     Write-Host 'smoke OK: health, digests, data version, parity, and private insights isolation passed.'
 }
+function Get-AcaReplicaCount([string]$App) {
+    # Replicas of the revisions that receive traffic; `replica list` without --revision shows only the latest one.
+    $rg = Get-RequiredEnv 'AZURE_RESOURCE_GROUP'
+    $revisions = az containerapp revision list --resource-group $rg --name $App -o json | ConvertFrom-Json
+    $total = 0
+    foreach ($revision in @($revisions | Where-Object { $_.properties.active -and $_.properties.trafficWeight -gt 0 })) {
+        $total += @(az containerapp replica list --resource-group $rg --name $App --revision $revision.name -o json | ConvertFrom-Json).Count
+    }
+    return $total
+}
 function Invoke-LoadTest([string]$Platform = 'both', [int]$Rps = 20, [int]$Seconds = 60) {
     if ($Platform -notin @('aks', 'aca', 'both')) { throw 'Usage: demo load-test [aks|aca|both] [-Rps N] [-Seconds N]' }
     if ($Rps -lt 1 -or $Seconds -lt 1) { throw 'Rps and Seconds must be positive.' }
@@ -392,7 +417,7 @@ function Invoke-LoadTest([string]$Platform = 'both', [int]$Rps = 20, [int]$Secon
         elseif ($target -eq 'aks') { kubectl -n football get hpa,pods }
         else {
             $rg = Get-RequiredEnv 'AZURE_RESOURCE_GROUP'
-            foreach ($app in (Get-RequiredEnv 'ACA_WEB_APP_NAME'), (Get-RequiredEnv 'ACA_INSIGHTS_APP_NAME')) { Write-Host "$app replicas before: $(az containerapp replica list --resource-group $rg --name $app --query 'length(@)' -o tsv)" }
+            foreach ($app in (Get-RequiredEnv 'ACA_WEB_APP_NAME'), (Get-RequiredEnv 'ACA_INSIGHTS_APP_NAME')) { Write-Host "$app replicas before: $(Get-AcaReplicaCount $app)" }
         }
         $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
         $out = Join-Path (Get-EvidenceDir) "loadtest-$target-$stamp.json"
@@ -405,10 +430,16 @@ function Invoke-LoadTest([string]$Platform = 'both', [int]$Rps = 20, [int]$Secon
         elseif ($target -eq 'aks') { kubectl -n football get hpa,pods }
         else {
             $rg = Get-RequiredEnv 'AZURE_RESOURCE_GROUP'
-            foreach ($app in (Get-RequiredEnv 'ACA_WEB_APP_NAME'), (Get-RequiredEnv 'ACA_INSIGHTS_APP_NAME')) { Write-Host "$app replicas after: $(az containerapp replica list --resource-group $rg --name $app --query 'length(@)' -o tsv)" }
+            foreach ($app in (Get-RequiredEnv 'ACA_WEB_APP_NAME'), (Get-RequiredEnv 'ACA_INSIGHTS_APP_NAME')) { Write-Host "$app replicas after: $(Get-AcaReplicaCount $app)" }
         }
         Write-Host "Saved $out"
     }
+}
+function Set-AksImage([string]$Deployment, [string]$Image, [string]$Digest) {
+    # One change for the image and the digest the badge reports, so the badge always names the running image.
+    $container = @{ name = $Deployment; image = $Image; env = @(@{ name = 'IMAGE_DIGEST'; value = $Digest }) }
+    $patch = @{ spec = @{ template = @{ spec = @{ containers = @($container) } } } } | ConvertTo-Json -Depth 10 -Compress
+    Invoke-KubectlChecked -n football patch deployment $Deployment --type strategic -p $patch
 }
 function Invoke-RolloutV2 {
     Set-DemoSubscription
@@ -423,14 +454,14 @@ function Invoke-RolloutV2 {
     $current = az containerapp revision list --resource-group $rg --name $web --query '[?properties.active].name | [0]' -o tsv
     if ($LASTEXITCODE -ne 0 -or -not $current) { throw 'Could not determine current ACA web revision.' }
     Invoke-AzChecked containerapp ingress traffic set --resource-group $rg --name $web --revision-weight "$current=100" --output none
-    Invoke-AzChecked containerapp update --resource-group $rg --name $web --image "$($v2.registry)/football-insights-web@$($v2.web)" --revision-suffix $suffix --output none
+    Invoke-AzChecked containerapp update --resource-group $rg --name $web --image "$($v2.registry)/football-insights-web@$($v2.web)" --set-env-vars "IMAGE_DIGEST=$($v2.web)" --revision-suffix $suffix --output none
     $newWeb = az containerapp revision list --resource-group $rg --name $web --query "[?ends_with(name, '$suffix')].name | [0]" -o tsv
     if ($LASTEXITCODE -ne 0 -or -not $newWeb) { throw 'Could not determine new ACA web revision.' }
     Invoke-AzChecked containerapp ingress traffic set --resource-group $rg --name $web --revision-weight "$current=50" "$newWeb=50" --output none
-    Invoke-AzChecked containerapp update --resource-group $rg --name $insights --image "$($v2.registry)/football-insights-insights@$($v2.insights)" --revision-suffix $suffix --output none
+    Invoke-AzChecked containerapp update --resource-group $rg --name $insights --image "$($v2.registry)/football-insights-insights@$($v2.insights)" --set-env-vars "IMAGE_DIGEST=$($v2.insights)" --revision-suffix $suffix --output none
     @{ aca_web_previous = $current; aca_web_v2 = $newWeb; suffix = $suffix } | ConvertTo-Json | Set-Content -Encoding utf8 (Get-RolloutPath)
-    Invoke-KubectlChecked -n football set image deployment/web "web=$($v2.registry)/football-insights-web@$($v2.web)"
-    Invoke-KubectlChecked -n football set image deployment/insights "insights=$($v2.registry)/football-insights-insights@$($v2.insights)"
+    Set-AksImage 'web' "$($v2.registry)/football-insights-web@$($v2.web)" $v2.web
+    Set-AksImage 'insights' "$($v2.registry)/football-insights-insights@$($v2.insights)" $v2.insights
     Invoke-KubectlChecked -n football rollout status deployment/web --timeout=10m
     Invoke-KubectlChecked -n football rollout status deployment/insights --timeout=10m
     Write-Host 'ACA web traffic:'; az containerapp ingress traffic show --resource-group $rg --name $web -o table
@@ -455,7 +486,7 @@ function Invoke-Rollback([string]$Platform = 'both') {
             Remove-Item -Force $rolloutPath
         } else { Write-Host 'No v2 rollout recorded for ACA web; its traffic is unchanged.' }
         $current = az containerapp show --resource-group $rg --name $insights --query 'properties.template.containers[0].image' -o tsv
-        if ($current -ne $v1Insights) { Invoke-AzChecked containerapp update --resource-group $rg --name $insights --image $v1Insights --output none }
+        if ($current -ne $v1Insights) { Invoke-AzChecked containerapp update --resource-group $rg --name $insights --image $v1Insights --set-env-vars "IMAGE_DIGEST=$($v1.insights)" --output none }
         else { Write-Host 'ACA insights already runs the v1 image.' }
         Write-Host 'ACA web traffic:'; az containerapp ingress traffic show --resource-group $rg --name $web -o table
     }
@@ -463,8 +494,8 @@ function Invoke-Rollback([string]$Platform = 'both') {
         # An explicit rolling update back to the v1 digests; `kubectl rollout undo` would revert whatever changed
         # last, which may be a model switch rather than the image.
         Connect-Aks
-        if ((Get-ContainerImage 'web') -ne $v1Web) { Invoke-KubectlChecked -n football set image deployment/web "web=$v1Web" } else { Write-Host 'AKS web already runs the v1 image.' }
-        if ((Get-ContainerImage 'insights') -ne $v1Insights) { Invoke-KubectlChecked -n football set image deployment/insights "insights=$v1Insights" } else { Write-Host 'AKS insights already runs the v1 image.' }
+        if ((Get-ContainerImage 'web') -ne $v1Web) { Set-AksImage 'web' $v1Web $v1.web } else { Write-Host 'AKS web already runs the v1 image.' }
+        if ((Get-ContainerImage 'insights') -ne $v1Insights) { Set-AksImage 'insights' $v1Insights $v1.insights } else { Write-Host 'AKS insights already runs the v1 image.' }
         Invoke-KubectlChecked -n football rollout status deployment/web --timeout=10m
         Invoke-KubectlChecked -n football rollout status deployment/insights --timeout=10m
         Write-Host 'AKS images:'; kubectl -n football get deploy web insights -o wide
@@ -587,6 +618,8 @@ function Invoke-Reset {
         $needsRollback = ($webImage -ne "$($v1.registry)/football-insights-web@$($v1.web)") -or ($insightsImage -ne "$($v1.registry)/football-insights-insights@$($v1.insights)")
     }
     if ($needsRollback) { Invoke-Rollback; $changed += 'rolled back v2 images/traffic to v1' }
+    $retired = Invoke-AcaRetireIdleRevisions
+    if ($retired -gt 0) { $changed += "deactivated $retired idle ACA web revision(s)" }
     $defaultModel = Get-EnvOrDefault 'DEFAULT_MODEL_DEPLOYMENT' 'gpt-6-astra'
     if ((Get-EnvOrDefault 'AI_MODEL_DEPLOYMENT' 'gpt-6-astra') -ne $defaultModel) { Invoke-SwitchModel $defaultModel; $changed += "model reset to $defaultModel" }
     if ($changed.Count -eq 0) { Write-Host 'reset: no changes needed.' } else { Write-Host "reset changed: $($changed -join '; ')" }

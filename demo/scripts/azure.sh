@@ -256,7 +256,21 @@ aca_deploy() {
   export ACA_DEPLOY_APPS=true
   group_deployment football-aca aca.bicep aca.bicepparam
   if [[ "$old" == __unset__ ]]; then unset ACA_DEPLOY_APPS; else export ACA_DEPLOY_APPS="$old"; fi
+  aca_retire_idle_revisions >/dev/null
   echo "ACA web: $(get_aca_web_url)"
+}
+aca_retire_idle_revisions() {
+  # web runs in multiple-revision mode for the v2 traffic split, so earlier revisions keep running at 0% traffic,
+  # each holding a replica. Deactivate them; they stay in the revision history and can be reactivated.
+  local rg web revisions rev count=0
+  rg="$(required_env AZURE_RESOURCE_GROUP)"; web="$(required_env ACA_WEB_APP_NAME)"
+  revisions="$(az containerapp revision list --resource-group "$rg" --name "$web" -o json)" || { echo "Could not list ACA web revisions." >&2; exit 1; }
+  for rev in $("$PYTHON" -c 'import json,sys; [print(r["name"]) for r in json.loads(sys.argv[1]) if r["properties"].get("active") and not r["properties"].get("trafficWeight")]' "$revisions"); do
+    az_checked containerapp revision deactivate --resource-group "$rg" --name "$web" --revision "$rev" --output none >&2
+    echo "Deactivated idle ACA web revision $rev." >&2
+    count=$((count + 1))
+  done
+  printf '%s' "$count"
 }
 get_aca_web_url() {
   if [[ -n "${ACA_WEB_URL:-}" ]]; then printf '%s' "$ACA_WEB_URL"; return; fi
@@ -324,8 +338,18 @@ smoke() {
   test_insights_isolation
   echo "smoke OK: health, digests, data version, parity, and private insights isolation passed."
 }
-load_test() {
-  local platform="${1:-both}" rps="${2:-20}" seconds="${3:-60}" targets target url stamp out rg app count local_override
+aca_replica_count() {
+  # Replicas of the revisions that receive traffic; `replica list` without --revision shows only the latest one.
+  local app="$1" rg revisions rev n total=0
+  rg="$(required_env AZURE_RESOURCE_GROUP)"
+  revisions="$(az containerapp revision list --resource-group "$rg" --name "$app" -o json)"
+  for rev in $("$PYTHON" -c 'import json,sys; [print(r["name"]) for r in json.loads(sys.argv[1]) if r["properties"].get("active") and r["properties"].get("trafficWeight")]' "$revisions"); do
+    n="$(az containerapp replica list --resource-group "$rg" --name "$app" --revision "$rev" -o json | "$PYTHON" -c 'import json,sys; print(len(json.load(sys.stdin)))')"
+    total=$((total + n))
+  done
+  printf '%s' "$total"
+}
+load_test() {  local platform="${1:-both}" rps="${2:-20}" seconds="${3:-60}" targets target url stamp out app local_override
   [[ "$platform" == aks || "$platform" == aca || "$platform" == both ]] || { echo "Usage: demo load-test [aks|aca|both] [-Rps N] [-Seconds N]" >&2; exit 1; }
   [[ "$rps" =~ ^[0-9]+$ && "$seconds" =~ ^[0-9]+$ && "$rps" -gt 0 && "$seconds" -gt 0 ]] || { echo "Rps and Seconds must be positive." >&2; exit 1; }
   [[ "$platform" == both ]] && targets="aks aca" || targets="$platform"
@@ -333,16 +357,22 @@ load_test() {
     [[ "$target" == aks ]] && connect_aks
     url="$(platform_url "$target")"; local_override=0; [[ "$url" =~ ^https?://(127\.0\.0\.1|localhost)(:|/|$) ]] && local_override=1
     if [[ $local_override -eq 1 ]]; then echo "Local URL override detected; skipping platform replica observations."; elif [[ "$target" == aks ]]; then kubectl -n football get hpa,pods; else
-      rg="$(required_env AZURE_RESOURCE_GROUP)"; for app in "$(required_env ACA_WEB_APP_NAME)" "$(required_env ACA_INSIGHTS_APP_NAME)"; do count="$(az containerapp replica list --resource-group "$rg" --name "$app" --query 'length(@)' -o tsv)"; echo "$app replicas before: $count"; done
+      for app in "$(required_env ACA_WEB_APP_NAME)" "$(required_env ACA_INSIGHTS_APP_NAME)"; do echo "$app replicas before: $(aca_replica_count "$app")"; done
     fi
     stamp="$(date -u +%Y%m%dT%H%M%SZ)"; out="$(evidence_dir)/loadtest-${target}-${stamp}.json"
     echo "Load testing $target at $url ($rps rps for $seconds s)."
     "$PYTHON" -m football_insights load-test --url "$url" --rps "$rps" --seconds "$seconds" | tee "$out"
     if [[ $local_override -eq 1 ]]; then echo "Local URL override detected; skipped platform replica observations."; elif [[ "$target" == aks ]]; then kubectl -n football get hpa,pods; else
-      rg="$(required_env AZURE_RESOURCE_GROUP)"; for app in "$(required_env ACA_WEB_APP_NAME)" "$(required_env ACA_INSIGHTS_APP_NAME)"; do count="$(az containerapp replica list --resource-group "$rg" --name "$app" --query 'length(@)' -o tsv)"; echo "$app replicas after: $count"; done
+      for app in "$(required_env ACA_WEB_APP_NAME)" "$(required_env ACA_INSIGHTS_APP_NAME)"; do echo "$app replicas after: $(aca_replica_count "$app")"; done
     fi
     echo "Saved $out"
   done
+}
+set_aks_image() {
+  # One change for the image and the digest the badge reports, so the badge always names the running image.
+  local deployment="$1" image="$2" digest="$3" patch
+  patch="$("$PYTHON" -c 'import json,sys; print(json.dumps({"spec":{"template":{"spec":{"containers":[{"name":sys.argv[1],"image":sys.argv[2],"env":[{"name":"IMAGE_DIGEST","value":sys.argv[3]}]}]}}}}))' "$deployment" "$image" "$digest")"
+  kubectl_checked -n football patch deployment "$deployment" --type strategic -p "$patch"
 }
 rollout_v2() {
   set_demo_subscription; import_deployment_outputs; import_digests v2; connect_aks
@@ -356,14 +386,14 @@ rollout_v2() {
   current="$(az containerapp revision list --resource-group "$rg" --name "$web" --query '[?properties.active].name | [0]' -o tsv)" || { echo "Could not determine current ACA web revision." >&2; exit 1; }
   [[ -n "$current" ]] || { echo "Could not determine current ACA web revision." >&2; exit 1; }
   az_checked containerapp ingress traffic set --resource-group "$rg" --name "$web" --revision-weight "$current=100" --output none
-  az_checked containerapp update --resource-group "$rg" --name "$web" --image "${registry}/football-insights-web@${web_digest}" --revision-suffix "$suffix" --output none
+  az_checked containerapp update --resource-group "$rg" --name "$web" --image "${registry}/football-insights-web@${web_digest}" --set-env-vars "IMAGE_DIGEST=${web_digest}" --revision-suffix "$suffix" --output none
   new_web="$(az containerapp revision list --resource-group "$rg" --name "$web" --query "[?ends_with(name, '$suffix')].name | [0]" -o tsv)"
   [[ -n "$new_web" ]] || { echo "Could not determine new ACA web revision." >&2; exit 1; }
   az_checked containerapp ingress traffic set --resource-group "$rg" --name "$web" --revision-weight "$current=50" "$new_web=50" --output none
-  az_checked containerapp update --resource-group "$rg" --name "$insights" --image "${registry}/football-insights-insights@${insights_digest}" --revision-suffix "$suffix" --output none
+  az_checked containerapp update --resource-group "$rg" --name "$insights" --image "${registry}/football-insights-insights@${insights_digest}" --set-env-vars "IMAGE_DIGEST=${insights_digest}" --revision-suffix "$suffix" --output none
   "$PYTHON" -c 'import json,sys; json.dump({"aca_web_previous":sys.argv[1],"aca_web_v2":sys.argv[2],"suffix":sys.argv[3]}, open(sys.argv[4],"w"), indent=2)' "$current" "$new_web" "$suffix" "$(rollout_path)"
-  kubectl_checked -n football set image deployment/web "web=${registry}/football-insights-web@${web_digest}"
-  kubectl_checked -n football set image deployment/insights "insights=${registry}/football-insights-insights@${insights_digest}"
+  set_aks_image web "${registry}/football-insights-web@${web_digest}" "$web_digest"
+  set_aks_image insights "${registry}/football-insights-insights@${insights_digest}" "$insights_digest"
   kubectl_checked -n football rollout status deployment/web --timeout=10m
   kubectl_checked -n football rollout status deployment/insights --timeout=10m
   echo "ACA web traffic:"; az containerapp ingress traffic show --resource-group "$rg" --name "$web" -o table
@@ -385,7 +415,7 @@ rollback() {
       rm -f "$rollout"
     else echo "No v2 rollout recorded for ACA web; its traffic is unchanged."; fi
     current="$(az containerapp show --resource-group "$rg" --name "$insights" --query 'properties.template.containers[0].image' -o tsv)"
-    if [[ "$current" != "$v1_insights" ]]; then az_checked containerapp update --resource-group "$rg" --name "$insights" --image "$v1_insights" --output none
+    if [[ "$current" != "$v1_insights" ]]; then az_checked containerapp update --resource-group "$rg" --name "$insights" --image "$v1_insights" --set-env-vars "IMAGE_DIGEST=${INSIGHTS_IMAGE_DIGEST}" --output none
     else echo "ACA insights already runs the v1 image."; fi
     echo "ACA web traffic:"; az containerapp ingress traffic show --resource-group "$rg" --name "$web" -o table
   fi
@@ -393,8 +423,8 @@ rollback() {
     # An explicit rolling update back to the v1 digests; `kubectl rollout undo` would revert whatever changed
     # last, which may be a model switch rather than the image.
     connect_aks
-    [[ "$(container_image web)" == "$v1_web" ]] && echo "AKS web already runs the v1 image." || kubectl_checked -n football set image deployment/web "web=$v1_web"
-    [[ "$(container_image insights)" == "$v1_insights" ]] && echo "AKS insights already runs the v1 image." || kubectl_checked -n football set image deployment/insights "insights=$v1_insights"
+    [[ "$(container_image web)" == "$v1_web" ]] && echo "AKS web already runs the v1 image." || set_aks_image web "$v1_web" "$WEB_IMAGE_DIGEST"
+    [[ "$(container_image insights)" == "$v1_insights" ]] && echo "AKS insights already runs the v1 image." || set_aks_image insights "$v1_insights" "$INSIGHTS_IMAGE_DIGEST"
     kubectl_checked -n football rollout status deployment/web --timeout=10m
     kubectl_checked -n football rollout status deployment/insights --timeout=10m
     echo "AKS images:"; kubectl -n football get deploy web insights -o wide
@@ -477,13 +507,14 @@ preflight() {
 }
 reset_demo() {
   set_demo_subscription; import_deployment_outputs; import_digests; connect_aks
-  local changed=() registry v1_web v1_insights needs=false default_model
+  local changed=() registry v1_web v1_insights needs=false default_model retired joined
   registry="$("$PYTHON" -c 'import json; print(json.load(open(".local/deploy/digests.json"))["registry"])')"; v1_web="${registry}/football-insights-web@${WEB_IMAGE_DIGEST}"; v1_insights="${registry}/football-insights-insights@${INSIGHTS_IMAGE_DIGEST}"
   [[ -f "$(rollout_path)" ]] && needs=true
   [[ "$(container_image web)" != "$v1_web" || "$(container_image insights)" != "$v1_insights" ]] && needs=true
   [[ "$needs" == true ]] && { rollback; changed+=("rolled back v2 images/traffic to v1"); }
+  retired="$(aca_retire_idle_revisions)"; [[ "$retired" -gt 0 ]] && changed+=("deactivated $retired idle ACA web revision(s)")
   default_model="$(env_or_default DEFAULT_MODEL_DEPLOYMENT gpt-6-astra)"; if [[ "$(env_or_default AI_MODEL_DEPLOYMENT gpt-6-astra)" != "$default_model" ]]; then switch_model "$default_model"; changed+=("model reset to $default_model"); fi
-  if [[ ${#changed[@]} -eq 0 ]]; then echo "reset: no changes needed."; else printf 'reset changed: %s\n' "${changed[*]}"; fi
+  if [[ ${#changed[@]} -eq 0 ]]; then echo "reset: no changes needed."; else joined="$(printf '%s; ' "${changed[@]}")"; echo "reset changed: ${joined%; }"; fi
 }
 teardown() {
   local dry=0 rg project node_rg confirm

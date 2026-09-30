@@ -226,7 +226,7 @@ Before the stream, the Copilot app is open on branch `stage-upsets`, reset to `m
 
 Keep the decision guide on screen. Short answers:
 
-- **Which platform should a hackathon team choose?** Start with ACA if you want the shortest path from a container to an HTTPS URL and don't need Kubernetes itself: here that was 4 resources against 23 declarations. Choose AKS if you need the Kubernetes ecosystem, per-pod network policies, or node control, or you want Kubernetes experience. Either way, use the same images, managed identities, and deployment by digest.
+- **Which platform should a hackathon team choose?** Start with ACA if you want the shortest path from a container to an HTTPS URL and don't need Kubernetes itself: here that was 5 resources against 24 declarations. Choose AKS if you need the Kubernetes ecosystem, per-pod network policies, or node control, or you want Kubernetes experience. Either way, use the same images, managed identities, and deployment by digest.
 - **Why doesn't the model compute the statistics or write SQL?** Numbers must be reproducible and tested. A model's arithmetic or SQL can be wrong silently, and nobody can review it live. Here the model only chooses typed, read-only tools and explains their results, and a deterministic check rejects any number it didn't get from a tool.
 - **Where did the Premier League scenarios from the abstract go?** Play styles, counterattacks, and player patterns need club match events or tracking data, and these datasets hold international results only. The architecture takes such data the same way:
   - a schema contract;
@@ -277,7 +277,7 @@ git switch v2-upsets; $env:IMAGE_TAG = 'v2-upsets'; demo build-push -Output v2; 
 
 | When | Action |
 | --- | --- |
-| 60 min before | Run `demo preflight`; every line must be PASS. Fix anything else now. |
+| 60 min before | On the stage network, run `demo allow-ip`, then `demo preflight`; every line must be PASS. Fix anything else now. |
 | 45 min before | Run `demo reset`, then `demo smoke`. |
 | 30 min before | Warm up: ask one prepared question on each platform, so each model deployment has served a request, and open each card once. |
 | 20 min before | Set up the window layout. Load the ACA and AKS tabs and the Data page. Reset the Copilot branch (`git switch -f -C stage-upsets main; git clean -fd -- demo docs`) and open the Copilot app on it. Open the evidence folder. |
@@ -299,6 +299,7 @@ git switch v2-upsets; $env:IMAGE_TAG = 'v2-upsets'; demo build-push -Output v2; 
 - [ ] Shell history cleared of anything sensitive (`Clear-History`; for PSReadLine, delete the history file).
 - [ ] No subscription or tenant IDs, email addresses, keys, portal account menus, or notes on screen. Prefer the app and the terminal over the Azure portal. The recording is permanent.
 - [ ] A wired network connection, and a phone hotspot tested as a fallback.
+- [ ] Both endpoints open in the stage browser on the stage network. A `403` from ACA or a timeout from AKS, while `preflight` shows your address inside `ALLOWED_CIDRS`, means a VPN or secure access client sends Azure traffic out through another address: see [Restrict access to your IP](DEPLOYMENT.md#restrict-access-to-your-ip).
 
 ### Credentials and their lifetimes
 

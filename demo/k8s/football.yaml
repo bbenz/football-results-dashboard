@@ -216,16 +216,22 @@ metadata:
   name: web
   namespace: football
 spec:
+  # Defaults written out, so that re-applying the same manifest reports "unchanged".
   parentRefs:
-    - name: football-web
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: football-web
   rules:
     - matches:
         - path:
             type: PathPrefix
             value: /
       backendRefs:
-        - name: web
+        - group: ""
+          kind: Service
+          name: web
           port: 8080
+          weight: 1
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler

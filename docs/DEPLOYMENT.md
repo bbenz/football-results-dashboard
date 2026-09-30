@@ -1,6 +1,6 @@
 # Azure deployment guide
 
-> **Not yet run against Azure.** These commands and templates were authored and validated offline only. They intentionally have not created, changed, or deleted Azure resources yet. The steps below will be verified during the POC by running them against Azure.
+> **Verified against Azure on 2026-09-30** in `westus3`. Both platforms were deployed with these commands into an empty resource group, and a second run of the whole sequence changed nothing but the new image digests. The rollout, rollback, reset, ingest, trace, allow-list, and teardown dry-run commands ran in both PowerShell and Bash. Problems found along the way are fixed in the templates and scripts; the ones you might still meet are under [Troubleshooting](#troubleshooting).
 
 This guide deploys the same football insights images to AKS Automatic and Azure Container Apps (ACA) with Microsoft Foundry, Azure Storage, Container Registry, workspace-based Application Insights, and keyless Microsoft Entra authentication.
 
@@ -44,8 +44,8 @@ This guide deploys the same football insights images to AKS Automatic and Azure 
 - `azure-platform`: deploys ACR, storage containers, six per-service user-assigned identities, and least-privilege role assignments.
 - `upload-data`: uploads only CSVs from `football_stats` and `global_development_data` under `raw/<folder>/` using Entra auth.
 - `build-push`: builds each image with its registry tag and records `{tag, registry, web, insights, ingest}` in `.local/deploy/digests.json`. Use `build-push -Output v2` (bash: `--output v2`) after setting `IMAGE_TAG` to record `.local/deploy/digests-v2.json`.
-- `aks-deploy`: deploys AKS Automatic, including explicit app-routing Gateway API configuration, the operator's **Azure Kubernetes Service RBAC Cluster Admin** role, and planned-maintenance windows that keep automatic cluster and node-image upgrades out of the three days before `EVENT_DATE` and the day after it. It then gets credentials, runs `kubelogin convert-kubeconfig -l azurecli`, applies `football.yaml`, deletes and re-creates the separate ingest Job from `ingest-job.yaml`, waits for the job, prints its logs, and waits for the `insights` and `web` rollouts.
-- `aca-deploy`: runs in two passes so ACA works standalone. First it sets `ACA_DEPLOY_APPS=false` and deploys only the environment and ingest job, starts the ingest job and waits for success, then sets `ACA_DEPLOY_APPS=true` and deploys web and insights.
+- `aks-deploy`: deploys AKS Automatic, including explicit app-routing Gateway API configuration, the operator's **Azure Kubernetes Service RBAC Cluster Admin** role, and planned-maintenance windows that keep automatic cluster and node-image upgrades out of the three days before `EVENT_DATE` and the day after it. It first checks that `Microsoft.PolicyInsights` is registered. It then gets credentials, runs `kubelogin convert-kubeconfig -l azurecli`, and applies `football.yaml`, retrying for up to two minutes if the API server is still settling after a cluster change. It deletes and re-creates the separate ingest Job from `ingest-job.yaml`, waits for the job and stops as soon as it fails, prints its logs, and waits for the `insights` and `web` rollouts.
+- `aca-deploy`: runs in two passes so ACA works standalone. First it sets `ACA_DEPLOY_APPS=false` and deploys only the environment and ingest job, starts the ingest job and waits for success, then sets `ACA_DEPLOY_APPS=true` and deploys web and insights. Finally it deactivates earlier web revisions that receive no traffic.
 - `ingest-aks` and `ingest-aca`: run each platform's ingest job again. On the same raw files, both reuse the same curated version with the same checksums.
 - `smoke`: checks both public web endpoints (`/healthz`, `/readyz`, `/data`), verifies badges show the recorded web digest, verifies the same data version, runs parity, and checks insights isolation.
 
@@ -111,7 +111,7 @@ Pass those addresses to `allow-ip`, or ask your network administrator which egre
 ./demo/scripts/demo.sh parity
 ```
 
-Load-test summaries and parity reports are saved under `EVIDENCE_DIR` (default `.local/evidence`). AKS load tests print HPA/pod state before and after; ACA load tests print web and insights replica counts.
+Load-test summaries and parity reports are saved under `EVIDENCE_DIR` (default `.local/evidence`). AKS load tests print HPA/pod state before and after; ACA load tests print the web and insights replicas of the revisions that receive traffic.
 
 ### Roll out v2 and rollback
 
@@ -128,7 +128,7 @@ IMAGE_TAG=<v2-tag> ./demo/scripts/demo.sh build-push --output v2
 ./demo/scripts/demo.sh rollback
 ```
 
-`rollout-v2` reads the tag and digests from `.local/deploy/digests-v2.json`. ACA web first pins 100% traffic to the current active revision, creates a uniquely suffixed v2 revision, then splits 50/50 and records `.local/deploy/rollout.json`. ACA insights switches fully because it is Single revision mode. AKS uses `kubectl set image` for web and insights and waits for rollouts. `rollback` takes `aks`, `aca`, or `both` (the default). On ACA it moves 100% of web traffic back to the previous revision, which is still running, so the change is immediate, and returns insights to the v1 digest. On AKS it sets the images back to the v1 digests with a rolling update (not `rollout undo`, which would revert whatever changed last, such as a model switch).
+`rollout-v2` reads the tag and digests from `.local/deploy/digests-v2.json`. ACA web first pins 100% traffic to the current active revision, creates a uniquely suffixed v2 revision, then splits 50/50 and records `.local/deploy/rollout.json`. ACA insights switches fully because it is Single revision mode. AKS patches web and insights, changing each image and its `IMAGE_DIGEST` together so the badge always names the running image, and waits for the rollouts. On ACA, the same variable changes with the image in each new revision. `rollback` takes `aks`, `aca`, or `both` (the default). On ACA it moves 100% of web traffic back to the previous revision, which is still running, so the change is immediate, and returns insights to the v1 digest. On AKS it sets the images, and the digests the badges report, back to v1 with a rolling update (not `rollout undo`, which would revert whatever changed last, such as a model switch). `reset` and `aca-deploy` also deactivate ACA web revisions that no longer receive traffic, because each one keeps a replica running; they stay in the revision history.
 
 ### Save pages for offline fallback
 
@@ -188,7 +188,7 @@ Preview everything in the resource group first:
 ./demo/scripts/demo.sh teardown --dry-run
 ```
 
-Dry run lists every resource in the resource group, shows whether it carries `project=<PROJECT_TAG>`, flags untagged resources for confirmation, and lists the AKS node resource group when available. Without dry run, the script deletes the whole resource group only after you type its name; the AKS node resource group goes with the cluster.
+Dry run lists every resource in the resource group, shows whether it carries `project=<PROJECT_TAG>`, flags untagged resources for confirmation, and lists the AKS node resource group when available. Application Insights adds a "Failure Anomalies" alert rule of its own, without the tag, so dry run flags it; it goes with the resource group. Without dry run, the script deletes the whole resource group only after you type its name; the AKS node resource group goes with the cluster.
 
 ## Troubleshooting
 

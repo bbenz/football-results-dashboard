@@ -121,3 +121,20 @@ def test_aks_gateway_keeps_the_callers_address() -> None:
     probes = ("port", "protocol", "request-path")
     assert service["metadata"]["annotations"] == {
         f"service.beta.kubernetes.io/port_80_health-probe_{name}": None for name in probes}
+
+def test_image_changes_also_update_the_badge_digest() -> None:
+    # The badge reports IMAGE_DIGEST. An image change that leaves it behind makes the badge name the wrong image.
+    for name in ("azure.ps1", "azure.sh"):
+        text = (DEMO / "scripts" / name).read_text(encoding="utf-8")
+        assert "set image" not in text, f"{name}: change images with the helper that also sets IMAGE_DIGEST"
+        updates = [line for line in text.splitlines() if "containerapp update" in line and "--image" in line]
+        assert updates, f"{name}: no image updates found; update this test"
+        for line in updates:
+            assert "IMAGE_DIGEST=" in line, f"{name}: {line.strip()}"
+
+def test_powershell_passes_az_queries_that_survive_cmd() -> None:
+    # az is a batch file on Windows. PowerShell passes an argument without spaces unquoted, and cmd.exe then
+    # mangles ( ) @ & | < > ^ and double quotes in it. Filter or count JSON in PowerShell instead.
+    text = (DEMO / "scripts" / "azure.ps1").read_text(encoding="utf-8")
+    risky = [q for q in re.findall(r"--query\s+'([^']*)'", text) if " " not in q and re.search(r'[()@&|<>^"]', q)]
+    assert not risky, f"queries cmd.exe would mangle: {risky}"
