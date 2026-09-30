@@ -73,6 +73,7 @@ Move down one level at a time, and say which level you are on:
 
 - **One platform shows an error.** Say which one, keep the other on screen, and open `replay/<platform>-*/index.html` for the failed one. Fix it after the segment with `demo smoke`.
 - **Both fail.** Go to fallback level 3.
+- **Both are blocked: ACA shows `RBAC: access denied` and AKS doesn't load.** The allow-list no longer matches the address Azure sees, for example after switching to the hotspot. Run `demo allow-ip` in the second terminal tab (about a minute), then refresh both tabs; show the replay pages meanwhile. If a VPN or secure access client is on, see [Restrict access to your IP](DEPLOYMENT.md#restrict-access-to-your-ip).
 - **A badge shows "AI narrative: unavailable".** Say so. The Foundry path is checked in segment 4.
 
 ## Segment 2: reference architecture and the data rule (03:00–09:00; hard stop 10:00)
@@ -298,7 +299,7 @@ git switch v2-upsets; $env:IMAGE_TAG = 'v2-upsets'; demo build-push -Output v2; 
 - [ ] The runbook and on-stage script on the second, unshared screen.
 - [ ] Shell history cleared of anything sensitive (`Clear-History`; for PSReadLine, delete the history file).
 - [ ] No subscription or tenant IDs, email addresses, keys, portal account menus, or notes on screen. Prefer the app and the terminal over the Azure portal. The recording is permanent.
-- [ ] A wired network connection, and a phone hotspot tested as a fallback.
+- [ ] A wired network connection, and a phone hotspot tested as a fallback. After switching networks, run `demo allow-ip` before reloading the endpoints.
 - [ ] Both endpoints open in the stage browser on the stage network. A `403` from ACA or a timeout from AKS, while `preflight` shows your address inside `ALLOWED_CIDRS`, means a VPN or secure access client sends Azure traffic out through another address: see [Restrict access to your IP](DEPLOYMENT.md#restrict-access-to-your-ip).
 
 ### Credentials and their lifetimes
