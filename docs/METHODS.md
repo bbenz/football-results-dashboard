@@ -1,8 +1,6 @@
 # Methods
 
-This document defines how the app answers each of the seven questions: the data used, the method, the minimum sample sizes, how uncertainty is shown, and what each answer cannot tell you. It is the contract for the analytics code under `demo/src/football_insights/`.
-
-> Status: Phase 0 draft, verified against the data on 2026-09-29. Evaluation results are added after the evaluation suite runs.
+This document defines how the app answers each of the seven questions: the data used, the method, the minimum sample sizes, how uncertainty is shown, and what each answer cannot tell you. It is the contract for the analytics code under `demo/src/football_insights/analytics/`.
 
 ## Deterministic numbers, AI explanations
 
@@ -85,7 +83,25 @@ Development indicators in the curated store: population (`SP.POP.TOTL`), GDP per
 
 - Proportions (for example the home-win share in a decade) carry 95% Wilson score intervals.
 - Differences between groups (host effect, friendly effect) carry 95% bootstrap percentile intervals from 2,000 resamples with a fixed seed, so the same data always produces the same interval.
-- Each question states its minimum sample; results below it are not shown.
+- Each question states its minimum sample; results below it are not shown, and the tool says so instead.
+
+| Question | View | Minimum sample |
+| --- | --- | --- |
+| 1 | Peak | ratings count only after a team's 30th match |
+| 1 | Career average | 40 years with at least one match |
+| 1 | Records | 300 matches |
+| 1 | Wins per million (novelty) | 100 matches; exact or alias mapping only |
+| 2 | Era leaders | per era: 10 (1872–1914), 15 (1915–1945), 20 (later eras) matches |
+| 3 | Per-decade shares | 100 matches in the decade |
+| 3 | Strength spread | 10 active teams in the year |
+| 3 | Goal timing | 200 goals with timelines in the decade |
+| 3 | Strength by region or income group | 20 team-years per group and decade |
+| 4 | Fixture network | teams with 10 matches in 2010–2026 |
+| 5 | Third-party share by decade | 100 matches in the decade |
+| 6 | Pooled host effect | 20 host editions with a non-host comparison |
+| 6 | Per-tournament host effect | 6 such editions |
+| 7 | Leaders, all time | 100 matches |
+| 7 | Friendly effect | 5 competitive matches in the following window |
 
 ## Question 1: Who is the best team of all time?
 
@@ -150,7 +166,7 @@ Development indicators in the curated store: population (`SP.POP.TOTL`), GDP per
 
 - **Editions**: matches of one major tournament less than 90 days apart form an edition, labeled by the year of its first match (official names can differ: Euro 2020 was played in 2021).
 - **Hosts**: participants whose reconciled venue identity hosted at least one of the edition's matches, which handles co-hosts (2002, 2026). Editions with no single host are excluded: fewer than 40% neutral matches (home-and-away formats such as Copa América 1975–1983), more than three venue countries (Euro 2020), or fewer than four teams.
-- **Performance against expectation**: for each host match, the actual score minus the expected score from pre-match ratings **without** the home bonus. The host effect is the difference between a team's host editions and its non-host editions of the same tournament, pooled with a bootstrap interval.
+- **Performance against expectation**: for each host match, the actual score (a win counts 1, a draw 0.5, a loss 0) minus the expected score from pre-match ratings **without** the home bonus. The host effect is the difference, in points per match, between a team's host editions and its non-host editions of the same tournament, pooled with a bootstrap interval.
 - **Progression proxy**: matches played by the host divided by the edition's median matches per team, compared with the same team's non-host editions. More matches usually means going further.
 - **2026 example**: Canada, Mexico, and the United States at the 2026 FIFA World Cup.
 - **Development lens (optional)**: host effects split by the host's GDP per capita in the edition year, described, not modeled.
@@ -183,4 +199,13 @@ The app answers these with an honest limitation and the data that would be neede
 
 ## Grounding and evaluation
 
-Every tool result carries evidence IDs, the method version, the dataset version, coverage notes, and caveats. A deterministic validator checks that every number in the narrative matches a tool value within the stated rounding. The evaluation suite and its results are documented here after Phase 3.
+Every tool result carries evidence IDs, the method version, the dataset version, coverage notes, and caveats. The model sees tool results and nothing else.
+
+The grounding validator (`demo/src/football_insights/agent/grounding.py`) is deterministic:
+
+- It extracts every numeral in the narrative, including percentages, thousands separators, decades such as "1950s", signs, and "million" or "billion".
+- A number passes only if some tool result contains the same value at the precision the narrative uses: "47%" matches 47.2, "1.7 million" matches 1,712,345. Magnitudes are compared, so "fell by 6.6 points" matches a change of −6.6.
+- Numbers typed in the viewer's own question and ordinal positions from 1st to 10th are exempt. Numbers written as words are not checked.
+- If any number fails, the model is asked once to rewrite using only tool numbers. If it fails again, the narrative is hidden and the page shows the deterministic evidence with a notice. An answer that called no tool is hidden as well.
+
+An automated test runs every tool with every parameter combination and checks that each headline and chart summary passes the same validator. The evaluation suite and its results are documented here after it runs against both model deployments.

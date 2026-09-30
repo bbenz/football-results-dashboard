@@ -58,7 +58,7 @@ def synthetic_reference(root: Path) -> Reference:
     return load(root)
 
 
-def test_settings(**overrides: object) -> Settings:
+def make_settings(**overrides: object) -> Settings:
     return Settings(_env_file=None, **overrides)  # type: ignore[call-arg]
 
 
@@ -81,7 +81,7 @@ def curated_store(tmp_path: Path, raw_dir: Path, reference: Reference):  # type:
     curated = tmp_path / "curated"
     run(LocalRawSource(raw_dir), LocalCuratedStorage(curated), platform="Test", files=SYNTHETIC_FILES,
         reference=reference)
-    return load_store(test_settings(curated_dir=curated), cache_dir=tmp_path / "cache")
+    return load_store(make_settings(curated_dir=curated), cache_dir=tmp_path / "cache")
 
 
 @pytest.fixture

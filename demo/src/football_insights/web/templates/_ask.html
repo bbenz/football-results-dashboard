@@ -1,0 +1,16 @@
+<section class="card ask" id="ask">
+  <h2>Ask a question</h2>
+  <form method="post" action="/ask" class="askform">
+    <label for="question" class="dim">Ask about international men's football results since 1872. Every number in the answer comes from the analytics tools.</label>
+    <div class="askrow">
+      <textarea id="question" name="question" rows="2" maxlength="{{ max_chars }}" required placeholder="For example: Which teams dominated the 1950s and 1960s?">{{ question or "" }}</textarea>
+      <button type="submit">Ask</button>
+    </div>
+    <p class="busy dim" hidden>Calling the analytics tools and the model; this can take several seconds...</p>
+  </form>
+  <div class="examples">
+    {% for q in examples %}
+    <form method="post" action="/ask" class="example"><input type="hidden" name="question" value="{{ q }}"><button type="submit" class="chip">{{ q }}</button></form>
+    {% endfor %}
+  </div>
+</section>

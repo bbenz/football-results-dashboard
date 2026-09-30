@@ -26,6 +26,7 @@ class MatchInput:
     away_score: int
     neutral: bool
     k: int
+    date: str = ""
 
 
 @dataclass
@@ -41,6 +42,7 @@ class RatedMatch:
     expected_home: float
     expected_home_neutral: float
     actual_home: float
+    date: str = ""
 
 
 @dataclass
@@ -90,6 +92,7 @@ def compute(matches: Iterable[MatchInput]) -> RatingHistory:
             match_id=m.match_id, year=m.year, home=m.home, away=m.away,
             home_pre=home_pre, away_pre=away_pre, home_post=ratings[m.home], away_post=ratings[m.away],
             expected_home=e_home, expected_home_neutral=expected(home_pre - away_pre), actual_home=actual,
+            date=m.date,
         ))
         for team in (m.home, m.away):
             history.year_end.setdefault(team, {})[m.year] = ratings[team]

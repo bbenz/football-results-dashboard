@@ -18,7 +18,9 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from opentelemetry import trace
+from pydantic import BaseModel, Field
 
+from ..agent.loop import InsightsAgent, QuestionRejected
 from ..analytics.context import ToolContext
 from ..analytics.registry import TOOLS, ToolError, function_tools, run_tool
 from ..cards import CARDS
@@ -33,16 +35,24 @@ RETRY_SECONDS = 15
 MAX_BODY_BYTES = 16_384
 
 
+class AskBody(BaseModel):
+    question: str = Field(max_length=2000)
+    deployment: str | None = None
+
+
 class State:
     def __init__(self) -> None:
         self.ctx: ToolContext | None = None
+        self.agent: InsightsAgent | None = None
         self.error: str = "starting"
         self.loaded_at: float | None = None
         self._lock = threading.Lock()
 
     def set(self, store: CuratedStore) -> None:
         with self._lock:
-            self.ctx = ToolContext(store)
+            ctx = ToolContext(store)
+            self.ctx = ctx
+            self.agent = InsightsAgent(get_settings(), lambda name, args: traced_tool(ctx, name, args))
             self.error = ""
             self.loaded_at = time.time()
 
@@ -143,6 +153,7 @@ def create_app() -> FastAPI:
             "dataset_label": ctx.store.dataset_label,
             "curated_source": ctx.store.source,
             "model_deployment": settings.ai_model_deployment,
+            "allowed_deployments": settings.allowed_deployments,
             "narrative_mode": settings.narrative_mode,
             "tools": sorted(TOOLS),
         }
@@ -172,6 +183,17 @@ def create_app() -> FastAPI:
     def data_quality() -> dict[str, Any]:
         ctx = _ctx()
         return {"version": ctx.dataset_version, "report": ctx.store.data_quality}
+
+    @app.post("/v1/ask")
+    def ask(body: AskBody) -> dict[str, Any]:
+        _ctx()
+        agent = state.agent
+        assert agent is not None
+        try:
+            answer = agent.answer(body.question, body.deployment)
+        except QuestionRejected as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return answer.model_dump(mode="json")
 
     @app.get("/v1/traces/{trace_id}")
     def trace_spans(trace_id: str) -> list[dict[str, Any]]:

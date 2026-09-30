@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -27,11 +27,17 @@ from ..cards import by_number
 from ..charts import render as render_chart
 from ..config import get_settings
 from ..runtime import describe
-from ..schemas import Chart, Fact, ToolResult
+from ..schemas import Answer, Chart, Fact, ToolResult
 from ..telemetry import collector, configure, instrument_app
 
 log = logging.getLogger("football_insights.web")
 HERE = Path(__file__).parent
+EXAMPLES = (
+    "Did hosting help Canada, Mexico, and the United States at the 2026 World Cup?",
+    "Who is the best team of all time, and does the answer change with the definition?",
+    "How has home advantage changed since the early 1900s?",
+    "Which Premier League team is best at counterattacks?",
+)
 SECURITY_HEADERS = {
     "Content-Security-Policy": ("default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; "
                                 "object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"),
@@ -78,6 +84,19 @@ def chart_svg(chart: dict[str, Any] | None) -> Markup:
     return Markup(render_chart(Chart.model_validate(chart)))  # noqa: S704 - SVG built from escaped tool data
 
 
+def answer_view(answer: Answer) -> dict[str, Any]:
+    """Pick what the answer page shows: key facts (cited by the model, else the first tool's top facts) and the
+    first chart. All of it comes from tool results, never from model text."""
+    facts = [f for r in answer.results for f in r.facts]
+    by_id = {f.id: f for f in facts}
+    key = [by_id[e] for e in answer.key_evidence_ids if e in by_id] or (answer.results[0].facts[:4]
+                                                                         if answer.results else [])
+    chart = next((r.chart for r in answer.results if r.chart), None)
+    primary = next((r for r in answer.results if r.chart), answer.results[0] if answer.results else None)
+    return {"key_facts": [f.model_dump() for f in key[:6]], "chart": chart.model_dump() if chart else None,
+            "primary": primary.model_dump(mode="json") if primary else None}
+
+
 def create_app(client: httpx.AsyncClient | None = None) -> FastAPI:
     settings = get_settings()
     configure("web", settings)
@@ -101,7 +120,8 @@ def create_app(client: httpx.AsyncClient | None = None) -> FastAPI:
     async def headers_and_limits(request: Request, call_next):
         path = request.url.path
         if not path.startswith(("/static", "/healthz", "/readyz")):
-            bucket, limit = ("ask", settings.ask_rate_limit_per_minute) if path == "/ask" and request.method == "POST" \
+            is_ask = request.method == "POST" and path in ("/ask", "/api/ask")
+            bucket, limit = ("ask", settings.ask_rate_limit_per_minute) if is_ask \
                 else ("page", settings.web_rate_limit_per_minute)
             if not limiter.allow(client_key(request), bucket, limit):
                 response: Response = JSONResponse({"detail": "rate limit exceeded; try again in a minute"},
@@ -165,7 +185,47 @@ def create_app(client: httpx.AsyncClient | None = None) -> FastAPI:
                 cards.append({"card": meta[item["number"]], "result": result.model_dump(mode="json")})
         except (httpx.HTTPError, ValueError, KeyError) as exc:
             error = f"The insights service is not ready yet ({type(exc).__name__})."
-        return page(request, "index.html", badge=info, cards=cards, error=error)
+        return page(request, "index.html", badge=info, cards=cards, error=error, examples=EXAMPLES,
+                    max_chars=settings.question_max_chars)
+
+    async def ask_insights(question: str, deployment: str | None = None) -> tuple[int, dict[str, Any]]:
+        payload: dict[str, Any] = {"question": question[: settings.question_max_chars * 2]}
+        if deployment:
+            payload["deployment"] = deployment
+        try:
+            response = await client.post("/v1/ask", json=payload)
+        except httpx.HTTPError as exc:
+            return 503, {"detail": f"The insights service is unreachable ({type(exc).__name__})."}
+        if response.status_code != 200:
+            detail = response.json().get("detail", response.text) if response.headers.get(
+                "content-type", "").startswith("application/json") else response.text
+            return response.status_code, {"detail": str(detail)}
+        return 200, response.json()
+
+    @app.post("/ask", response_class=HTMLResponse)
+    async def ask_page(request: Request, question: str = Form(default="", max_length=4000)) -> HTMLResponse:
+        info = await badge()
+        status, body = await ask_insights(question)
+        if status != 200:
+            return page(request, "answer.html", badge=info, answer=None, question=question, error=body["detail"],
+                        examples=EXAMPLES, max_chars=settings.question_max_chars,
+                        status_code=400 if status == 400 else 503)
+        answer = Answer.model_validate(body)
+        return page(request, "answer.html", badge=info, answer=answer.model_dump(mode="json"),
+                    view=answer_view(answer), question=answer.question, error="", examples=EXAMPLES,
+                    max_chars=settings.question_max_chars)
+
+    @app.post("/api/ask")
+    async def ask_api(request: Request) -> JSONResponse:
+        try:
+            body = await request.json()
+        except ValueError:
+            return JSONResponse({"detail": "send JSON: {\"question\": \"...\"}"}, status_code=400)
+        if not isinstance(body, dict) or not isinstance(body.get("question"), str):
+            return JSONResponse({"detail": "send JSON: {\"question\": \"...\"}"}, status_code=400)
+        deployment = body.get("deployment") if isinstance(body.get("deployment"), str) else None
+        status, answer = await ask_insights(body["question"], deployment)
+        return JSONResponse(answer, status_code=status)
 
     @app.get("/data", response_class=HTMLResponse)
     async def data_page(request: Request) -> HTMLResponse:

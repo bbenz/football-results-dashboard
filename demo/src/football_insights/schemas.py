@@ -28,6 +28,8 @@ class Fact(BaseModel):
 
     @property
     def display(self) -> str:
+        if self.unit == "year" or self.id.rsplit(".", 1)[-1].endswith("year"):
+            return str(int(self.value))
         if isinstance(self.value, int) or self.decimals == 0:
             text = f"{round(self.value):,}"
         else:

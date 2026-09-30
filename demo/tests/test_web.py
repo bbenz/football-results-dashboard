@@ -89,3 +89,53 @@ def test_insights_readiness_and_tools(apps) -> None:  # type: ignore[no-untyped-
     about = get(insights, "/v1/about").json()
     assert about["runtime"]["platform"] == "ACA"
     assert about["narrative_mode"] == "off"
+
+
+def post(app, path: str, **kwargs) -> httpx.Response:  # type: ignore[no-untyped-def]
+    async def call() -> httpx.Response:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://web") as c:
+            return await c.post(path, **kwargs)
+
+    return asyncio.run(call())
+
+
+def test_ask_without_a_model_says_so_and_keeps_evidence_honest(apps) -> None:  # type: ignore[no-untyped-def]
+    web, _ = apps
+    page = post(web, "/ask", data={"question": "Who is the best team of all time?"})
+    assert page.status_code == 200
+    assert "AI narrative unavailable" in page.text and "switched off" in page.text
+    api = post(web, "/api/ask", json={"question": "Who is the best team of all time?"})
+    assert api.status_code == 200 and api.json()["narrative_status"] == "unavailable"
+
+
+def test_ask_rejects_bad_input_and_is_rate_limited(apps) -> None:  # type: ignore[no-untyped-def]
+    web, _ = apps
+    too_long = post(web, "/api/ask", json={"question": "x" * 400}, headers={"x-forwarded-for": "198.51.100.1"})
+    assert too_long.status_code == 400 and "limited to" in too_long.json()["detail"]
+    assert post(web, "/api/ask", content=b"not json", headers={"x-forwarded-for": "198.51.100.1"}).status_code == 400
+    assert post(web, "/api/ask", content=b"not json", headers={"x-forwarded-for": "198.51.100.1"}).status_code == 429
+    assert post(web, "/api/ask", content=b"not json", headers={"x-forwarded-for": "198.51.100.2"}).status_code == 400
+
+
+@pytest.mark.replay
+def test_live_answer_renders_narrative_evidence_and_trace(apps, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    from conftest import make_settings
+    from fake_responses import FakeClient, answer, tool_calls
+    from football_insights.agent.loop import InsightsAgent
+    from football_insights.insights import app as insights_module
+
+    ctx = insights_module.state.ctx
+    facts = {f.id: f for f in insights_module.traced_tool(ctx, "dataset_facts", {})[0].facts}
+    client = FakeClient([tool_calls(("dataset_facts", {})),
+                         answer(f"The data holds {int(facts['scope.matches'].value)} matches.", ["scope.matches"])])
+    settings = make_settings(foundry_project_endpoint="https://example.invalid/api/projects/p",
+                             narrative_cache_dir=tmp_path)
+    insights_module.state.agent = InsightsAgent(settings, lambda n, a: insights_module.traced_tool(ctx, n, a),
+                                                client_factory=lambda: client)
+    web, _ = apps
+    page = post(web, "/ask", data={"question": "How many matches are in the data?"})
+    html = page.text
+    assert "AI narrative: live" in html and "Grounded: 1 numbers checked" in html
+    assert f"The data holds {int(facts['scope.matches'].value)} matches." in html
+    assert "dataset_facts()" in html and "scope.matches" in html
+    assert "Trace ID for Application Insights" in html

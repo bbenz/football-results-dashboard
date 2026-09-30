@@ -1,31 +1,39 @@
 """The typed, read-only tools the insights agent may call.
 
-Each tool validates its arguments against a strict schema, runs deterministic
-SQL and Python over the curated store, and returns a bounded ToolResult.
-Results are cached per curated version, so repeated calls return identical
-numbers.
+Each question module exposes TOOL_NAME, DESCRIPTION, a strict Params model, and
+run(ctx, params). Every tool validates its arguments, runs deterministic SQL
+and Python over the curated store, and returns a bounded ToolResult. Results
+are cached per curated version, so repeated calls return identical numbers.
 """
 
 from __future__ import annotations
 
 import json
-import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Literal
+from types import ModuleType
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel
 
 from ..schemas import ToolResult
-from . import q3_trends
+from . import q1_best, q2_eras, q3_trends, q4_geopolitics, q5_hosts, q6_hosting, q7_friendlies, scope
 from .context import ToolContext
 
-
-class TrendsParams(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    metric: Literal["home_advantage", "goals_per_match"] = Field(
-        description="home_advantage: home win/draw/away win shares per decade in non-neutral matches. "
-                    "goals_per_match: average total goals per match per decade.")
+QUESTION_MODULES: tuple[ModuleType, ...] = (q1_best, q2_eras, q3_trends, q4_geopolitics, q5_hosts, q6_hosting,
+                                            q7_friendlies)
+QUESTIONS: dict[int, str] = {
+    1: "Who is the best team of all time",
+    2: "Which teams dominated different eras of football",
+    3: ("What trends have there been in international football throughout the ages - home advantage, total goals "
+        "scored, distribution of teams' strength etc"),
+    4: ("Can we say anything about geopolitics from football fixtures - how has the number of countries changed, "
+        "which teams like to play each other"),
+    5: "Which countries host the most matches where they themselves are not participating in",
+    6: "How much, if at all, does hosting a major tournament help a country's chances in the tournament",
+    7: ("Which teams are the most active in playing friendlies and friendly tournaments - does it help or hurt "
+        "them"),
+}
 
 
 @dataclass(frozen=True)
@@ -34,19 +42,39 @@ class ToolSpec:
     question: int
     description: str
     params: type[BaseModel]
-    func: Callable[[ToolContext, BaseModel], ToolResult]
+    func: Callable[[ToolContext, Any], ToolResult]
 
 
-TOOLS: dict[str, ToolSpec] = {
-    "trends": ToolSpec(
-        name="trends",
-        question=3,
-        description=("Question 3, trends in international football throughout the ages. "
-                     "Returns per-decade figures for one metric, with coverage and caveats."),
-        params=TrendsParams,
-        func=lambda ctx, p: q3_trends.run(ctx, p.metric),  # type: ignore[attr-defined]
-    ),
-}
+def _era_legend() -> str:
+    from ..reference import get_reference
+
+    return "Era ids: " + "; ".join(f"{e.id} = {e.label}" for e in get_reference().eras) + "."
+
+
+def _build() -> dict[str, ToolSpec]:
+    tools: dict[str, ToolSpec] = {}
+    legend = _era_legend()
+    for number, module in enumerate(QUESTION_MODULES, start=1):
+        description = f"Answers question {number}: \"{QUESTIONS[number]}\". {module.DESCRIPTION}"
+        if "era" in module.Params.model_fields:
+            description += " " + legend
+        tools[module.TOOL_NAME] = ToolSpec(name=module.TOOL_NAME, question=number, description=description,
+                                           params=module.Params, func=module.run)
+    tools["data_limits"] = ToolSpec(
+        name="data_limits", question=0,
+        description=("Call this when the question asks about something the data cannot answer: club football "
+                     "(for example the Premier League), women's football, tactics or play styles such as possession "
+                     "or counterattacks, player statistics, predictions or betting, or dates outside the data. "
+                     "Returns what the data covers and what data would be needed."),
+        params=scope.LimitsParams, func=scope.data_limits)
+    tools["dataset_facts"] = ToolSpec(
+        name="dataset_facts", question=0,
+        description="Returns an overview of the loaded data: matches, date range, teams, tournaments, and coverage.",
+        params=scope.FactsParams, func=scope.dataset_facts)
+    return tools
+
+
+TOOLS: dict[str, ToolSpec] = _build()
 
 
 class ToolError(ValueError):
@@ -70,23 +98,26 @@ def run_tool(ctx: ToolContext, name: str, arguments: dict[str, Any]) -> ToolResu
     return result
 
 
-def timed_run(ctx: ToolContext, name: str, arguments: dict[str, Any]) -> tuple[ToolResult, float]:
-    start = time.perf_counter()
-    result = run_tool(ctx, name, arguments)
-    return result, (time.perf_counter() - start) * 1000
-
-
 def _strict(schema: dict[str, Any]) -> dict[str, Any]:
-    """Shape a pydantic schema for strict function calling: no titles, all properties required."""
-    out = {k: v for k, v in schema.items() if k not in ("title", "default")}
-    if out.get("type") == "object":
-        props = {k: _strict(v) for k, v in out.get("properties", {}).items()}
-        out["properties"] = props
-        out["required"] = list(props)
-        out["additionalProperties"] = False
-    if "anyOf" in out:
-        out["anyOf"] = [_strict(s) for s in out["anyOf"]]
-    return out
+    """Shape a pydantic schema for strict function calling: inline refs, no titles, all properties required."""
+    defs = schema.get("$defs", {})
+
+    def walk(node: Any) -> Any:
+        if isinstance(node, dict):
+            if "$ref" in node:
+                return walk(defs[node["$ref"].split("/")[-1]])
+            out = {k: walk(v) for k, v in node.items() if k not in ("title", "default", "$defs")}
+            if out.get("type") == "object":
+                props = out.get("properties", {})
+                out["properties"] = props
+                out["required"] = list(props)
+                out["additionalProperties"] = False
+            return out
+        if isinstance(node, list):
+            return [walk(v) for v in node]
+        return node
+
+    return walk(schema)
 
 
 def function_tools(names: list[str] | None = None) -> list[dict[str, Any]]:

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Answer{% endblock %}
+{% block content %}
+{% include "_ask.html" %}
+{% if error %}
+<section class="card"><p class="notice">{{ error }}</p></section>
+{% elif answer %}
+{% set a = answer %}
+<section class="card answer">
+  <h2>{{ a.question }}</h2>
+  <div class="status">
+    {% if a.narrative_status == "live" %}<span class="pill ok">AI narrative: live</span>
+    {% elif a.narrative_status == "cached" %}<span class="pill warn">Cached narrative{% if a.cached_at %} from {{ a.cached_at }}{% endif %}</span>
+    {% elif a.narrative_status == "fallback" %}<span class="pill bad">Narrative hidden: failed the grounding check</span>
+    {% elif a.narrative_status == "filtered" %}<span class="pill bad">Blocked by content filtering</span>
+    {% else %}<span class="pill bad">AI narrative unavailable</span>{% endif %}
+    {% if a.grounding.status == "passed" %}<span class="pill ok">Grounded: {{ a.grounding.numbers_checked }} numbers checked</span>
+    {% elif a.grounding.status == "passed_after_retry" %}<span class="pill ok">Grounded after one retry: {{ a.grounding.numbers_checked }} numbers checked</span>
+    {% elif a.grounding.status == "failed_fallback" %}<span class="pill bad">Ungrounded: {{ a.grounding.ungrounded|join(", ") }}</span>{% endif %}
+    {% if not a.in_scope %}<span class="pill warn">Outside what the data covers</span>{% endif %}
+    {% if a.model %}<span class="pill dimpill">{{ a.model.deployment }} · {{ (a.model.latency_ms / 1000)|round(1) }} s · {{ "{:,}".format(a.model.input_tokens) }} in / {{ "{:,}".format(a.model.output_tokens) }} out tokens · est. ${{ "%.4f"|format(a.model.estimated_cost_usd) }}</span>{% endif %}
+  </div>
+  {% if a.notice %}<p class="notice">{{ a.notice }}</p>{% endif %}
+  {% if a.narrative %}<p class="narrative">{{ a.narrative }}</p>{% endif %}
+
+  {% if view.key_facts %}
+  <ul class="facts">
+    {% for f in view.key_facts %}<li><span class="value">{{ f|fact }}</span><span class="label">{{ f.label }}</span><code class="eid">{{ f.id }}</code></li>{% endfor %}
+  </ul>
+  {% endif %}
+  {% if view.chart %}
+  <figure class="figure">
+    {{ chart_svg(view.chart) }}
+    <figcaption class="summary"><strong>Chart summary.</strong> {{ view.chart.summary }}</figcaption>
+  </figure>
+  {% endif %}
+  {% if a.cannot_tell %}<div class="cannot"><strong>What this data can't tell you.</strong> {% for c in a.cannot_tell %}{{ c }}{% if not loop.last %} {% endif %}{% endfor %}</div>{% endif %}
+  {% if a.caveats %}<details class="evidence" open><summary><span class="chev">&#9656;</span> Caveats from the tools</summary><ul>{% for c in a.caveats %}<li>{{ c }}</li>{% endfor %}</ul></details>{% endif %}
+
+  <details class="evidence">
+    <summary><span class="chev">&#9656;</span> Tool calls and evidence ({{ a.tool_calls|length }} call{{ "" if a.tool_calls|length == 1 else "s" }})</summary>
+    <ol class="calls">
+      {% for c in a.tool_calls %}
+      <li><code>{{ c.name }}({% for k, v in c.arguments.items() %}{{ k }}={{ v }}{% if not loop.last %}, {% endif %}{% endfor %})</code>
+        {% if c.ok %}<span class="dim">{{ c.duration_ms }} ms · {{ c.evidence_ids|length }} evidence IDs</span>{% else %}<span class="bad">{{ c.error }}</span>{% endif %}</li>
+      {% endfor %}
+    </ol>
+    {% for r in a.results %}
+    <details class="evidence nested"><summary><span class="chev">&#9656;</span> {{ r.title }}</summary>
+      {% include "_result.html" %}
+    </details>
+    {% endfor %}
+  </details>
+  <p class="dim">Trace ID for Application Insights: <code class="copy" data-copy="{{ trace_id }}" title="Copy trace ID">{{ trace_id }}</code> · <a href="/trace/{{ trace_id }}">local trace view</a></p>
+</section>
+{% endif %}
+{% endblock %}

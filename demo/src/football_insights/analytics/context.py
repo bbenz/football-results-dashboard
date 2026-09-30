@@ -27,10 +27,11 @@ class ToolContext:
         with self._lock:
             if self._ratings is None:
                 rows = self.store.query(
-                    "select match_id, year, home_team, away_team, home_score, away_score, neutral, k "
-                    "from matches order by match_id")
+                    "select match_id, year, home_team, away_team, home_score, away_score, neutral, k, "
+                    "strftime(date, '%Y-%m-%d') from matches order by match_id")
                 self._ratings = ratings.compute(
-                    ratings.MatchInput(int(r[0]), int(r[1]), r[2], r[3], int(r[4]), int(r[5]), bool(r[6]), int(r[7]))
+                    ratings.MatchInput(int(r[0]), int(r[1]), r[2], r[3], int(r[4]), int(r[5]), bool(r[6]), int(r[7]),
+                                       str(r[8]))
                     for r in rows)
             return self._ratings
 

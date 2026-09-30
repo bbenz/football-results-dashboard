@@ -24,7 +24,7 @@ def test_real_data_passes_verification() -> None:
 def test_real_ingest_is_deterministic_and_tools_match_independent_sql(tmp_path: Path) -> None:
     import duckdb
 
-    from conftest import test_settings
+    from conftest import make_settings
     from football_insights.analytics import q3_trends
     from football_insights.analytics.context import ToolContext
     from football_insights.ingest.pipeline import run
@@ -36,7 +36,7 @@ def test_real_ingest_is_deterministic_and_tools_match_independent_sql(tmp_path: 
     assert first.version == second.version
     assert first.manifest["outputs"] == second.manifest["outputs"]
 
-    store = load(test_settings(curated_dir=tmp_path / "a"), cache_dir=tmp_path / "cache")
+    store = load(make_settings(curated_dir=tmp_path / "a"), cache_dir=tmp_path / "cache")
     result = q3_trends.home_advantage(ToolContext(store))
     last = result.table.rows[-1]
     decade = int(str(last[0])[:4])

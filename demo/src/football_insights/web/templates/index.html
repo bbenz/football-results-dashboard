@@ -16,6 +16,8 @@
 
 {% if error %}<p class="notice">{{ error }}</p>{% endif %}
 
+{% with question="" %}{% include "_ask.html" %}{% endwith %}
+
 <div class="toolbar">
   <button type="button" class="expand-all">Expand all</button>
 </div>
