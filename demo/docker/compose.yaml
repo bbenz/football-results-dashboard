@@ -35,7 +35,9 @@ services:
       FOUNDRY_PROJECT_ENDPOINT: ${FOUNDRY_PROJECT_ENDPOINT:-}
       AI_MODEL_DEPLOYMENT: ${AI_MODEL_DEPLOYMENT:-gpt-6-astra}
       AI_ALLOWED_DEPLOYMENTS: ${AI_ALLOWED_DEPLOYMENTS:-gpt-6-astra,gpt-6-sol}
-      AI_NARRATIVE_MODE: ${AI_NARRATIVE_MODE:-}
+      # Off unless compose.live.yaml (demo up -LiveModel) supplies a credential: a container can't use the host's
+      # sign-in, so an endpoint in .env alone would make the badge claim a live model that can't be reached.
+      AI_NARRATIVE_MODE: ${AI_NARRATIVE_MODE:-off}
     volumes:
       - curated:/curated:ro
       - ../../.local/traces:/traces

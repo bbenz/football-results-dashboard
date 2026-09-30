@@ -45,7 +45,7 @@ The last line should read `verify-data PASSED: 0 failure(s), 0 warning(s).` A fa
 demo up
 ```
 
-This builds three images (`web`, `insights`, `ingest`), runs `ingest` once against a read-only mount of `data/`, starts `insights` (internal only) and `web`, and waits until the app is ready at <http://127.0.0.1:8080>. The environment badge shows `Local`, the short image digests, the curated data version, and `AI narrative: off`.
+This builds three images (`web`, `insights`, `ingest`), runs `ingest` once against a read-only mount of `data/`, starts `insights` (internal only) and `web`, and waits until the app is ready at <http://127.0.0.1:8080>. The environment badge shows `Local`, the short image digests, the curated data version, and `AI narrative: off`. The narrative stays off even if `.env` has a Foundry endpoint, because the containers get no credential unless you use `-LiveModel` (section 4).
 
 Every insight card works without a model. Each card's **View** selector shows the other views of its question, including the development-lens views that use World Bank data. Without a model, the question box still shows the evidence and says that the AI narrative is off.
 
@@ -53,6 +53,7 @@ Every insight card works without a model. Each card's **View** selector shows th
 - `demo down` stops everything.
 - Only `web` publishes a port, and only on `127.0.0.1`.
 - The curated store lives in a Docker volume; the raw data is never copied into an image.
+- If <http://127.0.0.1:8080> stops answering after Docker Desktop restarts its engine, even though `docker ps` shows the containers healthy, run `demo down` and then `demo up`. Docker Desktop can fail to restore a port published only on `127.0.0.1`; recreating the containers restores it.
 
 ## 4. Use the live models (optional, needs Azure)
 

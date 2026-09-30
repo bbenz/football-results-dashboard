@@ -138,3 +138,13 @@ def test_powershell_passes_az_queries_that_survive_cmd() -> None:
     text = (DEMO / "scripts" / "azure.ps1").read_text(encoding="utf-8")
     risky = [q for q in re.findall(r"--query\s+'([^']*)'", text) if " " not in q and re.search(r'[()@&|<>^"]', q)]
     assert not risky, f"queries cmd.exe would mangle: {risky}"
+
+def test_local_compose_is_live_only_with_the_token_overlay() -> None:
+    # A container can't use the host's sign-in, so plain `demo up` must report the narrative as off even when .env
+    # holds a Foundry endpoint; only the -LiveModel overlay, which mounts the token file, turns it on.
+    base = yaml.safe_load((DEMO / "docker" / "compose.yaml").read_text(encoding="utf-8"))
+    live = yaml.safe_load((DEMO / "docker" / "compose.live.yaml").read_text(encoding="utf-8"))
+    assert base["services"]["insights"]["environment"]["AI_NARRATIVE_MODE"] == "${AI_NARRATIVE_MODE:-off}"
+    assert "AZURE_TOKEN_FILE" not in base["services"]["insights"]["environment"]
+    overlay = live["services"]["insights"]["environment"]
+    assert overlay["AI_NARRATIVE_MODE"] == "live" and overlay["AZURE_TOKEN_FILE"]
