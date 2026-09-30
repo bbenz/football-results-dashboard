@@ -17,6 +17,11 @@
     logs          Show the last Compose log lines.
     test          Run the no-data guard, ruff, mypy, and the tests.
     guard         Run the no-data guard on the index and the full history.
+    install-hook  Optional: install a git pre-commit hook that runs the no-data guard.
+
+  Azure commands (not run by local setup)
+    azure-foundation, azure-platform, upload-data, build-push, aks-deploy, aca-deploy,
+    ingest-aks, ingest-aca, smoke, allow-ip, switch-model <deployment>, teardown -DryRun
 
   Settings come from environment variables and the repository's .env (see .env.example).
 #>
@@ -24,10 +29,12 @@
 param(
     [Parameter(Position = 0)][string]$Command = 'help',
     [switch]$LiveModel,
+    [switch]$DryRun,
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot '_common.ps1')
+. (Join-Path $PSScriptRoot 'azure.ps1')
 
 switch ($Command) {
     'bootstrap' {
@@ -74,5 +81,22 @@ switch ($Command) {
         Invoke-Checked $script:Python (Join-Path $script:Root 'demo/scripts/check_no_data.py')
         Invoke-Checked $script:Python (Join-Path $script:Root 'demo/scripts/check_no_data.py') --history
     }
+    'install-hook' {
+        $hook = Join-Path $script:Root '.git/hooks/pre-commit'
+        [IO.File]::WriteAllText($hook, "#!/bin/sh`n# Installed by demo install-hook: refuse commits that would add data.`nexec python demo/scripts/check_no_data.py`n")
+        Write-Host "pre-commit hook installed: $hook"
+    }
+    'azure-foundation' { Invoke-AzureFoundation }
+    'azure-platform' { Invoke-AzurePlatform }
+    'upload-data' { Invoke-UploadData }
+    'build-push' { Invoke-BuildPush }
+    'aks-deploy' { Invoke-AksDeploy }
+    'aca-deploy' { Invoke-AcaDeploy }
+    'ingest-aks' { Invoke-IngestAks }
+    'ingest-aca' { Invoke-IngestAca }
+    'smoke' { Invoke-Smoke }
+    'allow-ip' { Invoke-AllowIp }
+    'switch-model' { Invoke-SwitchModel -Deployment $(if ($Rest.Count) { $Rest[0] } else { '' }) }
+    'teardown' { Invoke-Teardown -DryRun:$DryRun }
     default { Get-Help $PSCommandPath -Detailed | Out-String | Write-Host }
 }

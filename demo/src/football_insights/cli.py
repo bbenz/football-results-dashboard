@@ -7,6 +7,8 @@ Commands:
   dq-report     Print the data-quality report of the active curated version.
   tool          Run one deterministic analytics tool and print its result.
   tools         List the tools the insights agent can call.
+  eval          Run the evaluation suite against the live model deployments.
+  capture-narratives  Save labeled narratives for the offline fallback tier.
 """
 
 from __future__ import annotations
@@ -14,7 +16,9 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
+from typing import Any
 
 from .config import get_settings
 
@@ -110,7 +114,90 @@ def _tools(args: argparse.Namespace) -> int:
     from .analytics.registry import TOOLS
 
     for spec in TOOLS.values():
-        print(f"{spec.name:22} Q{spec.question}  {spec.description.splitlines()[0]}")
+        print(f"{spec.name:22} Q{spec.question}  {spec.description.splitlines()[0][:100]}")
+    return 0
+
+
+def _local_agent() -> tuple[Any, Any]:
+    from .agent.loop import InsightsAgent
+    from .analytics.context import ToolContext
+    from .analytics.registry import run_tool
+    from .store import load
+
+    settings = get_settings()
+    if not settings.foundry_project_endpoint:
+        raise SystemExit("set FOUNDRY_PROJECT_ENDPOINT (and sign in with az login) to call the live model")
+    ctx = ToolContext(load(settings))
+    return InsightsAgent(settings, lambda name, a: (run_tool(ctx, name, a), 0.0)), ctx
+
+
+def _url_asker(url: str) -> Any:
+    import httpx
+
+    from .schemas import Answer
+
+    endpoint = url.rstrip("/") + "/api/ask"
+
+    def ask(question: str, deployment: str) -> Answer:
+        for _ in range(4):
+            response = httpx.post(endpoint, json={"question": question, "deployment": deployment}, timeout=120)
+            if response.status_code == 429:
+                time.sleep(61)
+                continue
+            response.raise_for_status()
+            return Answer.model_validate(response.json())
+        raise SystemExit(f"rate limited repeatedly by {endpoint}")
+
+    return ask
+
+
+def _eval(args: argparse.Namespace) -> int:
+    from . import evaluation
+    from .analytics.registry import run_tool
+
+    settings = get_settings()
+    cases = [c for c in evaluation.load_cases() if not args.category or c.category in args.category.split(",")]
+    cases = cases[: args.limit] if args.limit else cases
+    deployments = args.deployments.split(",") if args.deployments else settings.allowed_deployments
+    if args.target == "url":
+        from .analytics.context import ToolContext
+        from .store import load
+
+        ctx = ToolContext(load(settings))
+        ask = _url_asker(args.url)
+    else:
+        agent, ctx = _local_agent()
+        ask = agent.answer
+    print(f"eval: {len(cases)} cases x {len(deployments)} deployments x {args.repeats} repeats against {args.target}")
+    results = evaluation.run(cases, ask, deployments, args.repeats, run_tool=lambda n, a: run_tool(ctx, n, a),
+                             on_result=lambda r: print(f"  {r.deployment:12} {r.case_id:22} tool={r.tool_ok!s:5} "
+                                                       f"grounded={r.grounding_ok!s:5} {r.wall_seconds:6.1f}s"))
+    summary = evaluation.summarize(results)
+    path = evaluation.write_report(results, summary, Path(args.out) if args.out else settings.evidence_dir / "eval",
+                                   f"{args.target}-{'-'.join(deployments)}")
+    print(evaluation.render(summary))
+    print(f"report: {path}")
+    return 0
+
+
+def _capture(args: argparse.Namespace) -> int:
+    from datetime import UTC, datetime
+
+    from . import evaluation
+    from .agent import narratives
+
+    settings = get_settings()
+    agent, _ = _local_agent()
+    saved = 0
+    for case in (c for c in evaluation.load_cases() if c.capture):
+        answer = agent.answer(case.question, args.deployment)
+        if answer.narrative_status == "live" and answer.grounding.status in ("passed", "passed_after_retry"):
+            narratives.save(settings.narrative_cache_dir, answer, datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"))
+            saved += 1
+            print(f"  captured {case.id}")
+        else:
+            print(f"  NOT captured {case.id}: {answer.narrative_status}, grounding {answer.grounding.status}")
+    print(f"capture-narratives: saved {saved} labeled narratives to {settings.narrative_cache_dir}")
     return 0
 
 
@@ -145,6 +232,21 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("tools", help="list the analytics tools")
     p.set_defaults(func=_tools)
+
+    p = sub.add_parser("eval", help="run the evaluation suite against the live model deployments")
+    p.add_argument("--target", choices=("local", "url"), default="local",
+                   help="local: in-process agent with your sign-in; url: a deployed web endpoint")
+    p.add_argument("--url", help="base URL of a deployed web service for --target url")
+    p.add_argument("--deployments", help="comma-separated deployments (default: AI_ALLOWED_DEPLOYMENTS)")
+    p.add_argument("--repeats", type=int, default=3)
+    p.add_argument("--category", help="comma-separated categories, e.g. q1,q6,limitation")
+    p.add_argument("--limit", type=int, help="run only the first N cases")
+    p.add_argument("--out", help="output folder (default: EVIDENCE_DIR/eval)")
+    p.set_defaults(func=_eval)
+
+    p = sub.add_parser("capture-narratives", help="save labeled narratives for the offline fallback tier")
+    p.add_argument("--deployment", help="deployment to use (default: AI_MODEL_DEPLOYMENT)")
+    p.set_defaults(func=_capture)
 
     args = parser.parse_args(argv)
     return int(args.func(args))

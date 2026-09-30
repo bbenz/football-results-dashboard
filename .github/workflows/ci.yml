@@ -1,0 +1,39 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the no-data guard scans the full history
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: No data in the index or any commit
+        run: |
+          python demo/scripts/check_no_data.py
+          python demo/scripts/check_no_data.py --history
+
+      - name: Install pinned dependencies
+        run: python -m pip install --require-hashes -r demo/requirements-dev.lock
+
+      - name: Lint and type-check
+        working-directory: demo
+        run: |
+          python -m ruff check src tests scripts
+          python -m mypy
+
+      # Synthetic fixtures only: there are no Kaggle credentials and no data here, so real-data tests skip.
+      - name: Tests
+        working-directory: demo
+        run: python -m pytest -q

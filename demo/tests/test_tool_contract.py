@@ -10,12 +10,12 @@ import time
 from typing import Any
 
 import pytest
-from conftest import requires_real_data
-from helpers import M, make_store
 
+from conftest import requires_real_data
 from football_insights.agent.grounding import check
 from football_insights.analytics.context import ToolContext
 from football_insights.analytics.registry import TOOLS, run_tool
+from helpers import M, make_store
 
 EVIDENCE_ID = re.compile(r"^[a-z0-9_]+(\.[a-z0-9_]+)+$")
 
@@ -73,7 +73,6 @@ def test_every_combination_on_synthetic_data(name: str) -> None:
 @requires_real_data
 def test_every_combination_on_real_data(tmp_path) -> None:  # type: ignore[no-untyped-def]
     from conftest import REAL_DATA, make_settings
-
     from football_insights.ingest.pipeline import run
     from football_insights.ingest.storage import LocalCuratedStorage, LocalRawSource
     from football_insights.store import load

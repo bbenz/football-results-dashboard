@@ -1,0 +1,95 @@
+# Evaluation cases for the insights agent (hand-authored; questions and expectations only, no data).
+#
+# expect_tools: the answer passes tool selection if ANY listed call was made; each entry names a tool and,
+#   optionally, arguments that must match exactly (unlisted arguments are free).
+# expect_in_scope: false for questions the data cannot answer (the agent must call data_limits and say so).
+# expect_fact: an evidence ID whose value the narrative must state; the value is computed by the deterministic
+#   tool when the evaluation runs, never written here.
+# expect_top: the narrative must name the top entity of the expected tool's ranking (computed at run time).
+# capture: answers to capture as labeled cached narratives for the offline fallback tier.
+schema_version: 1
+cases:
+  # Question 1: best team of all time
+  - {id: q1-best-generic, category: q1, question: "Who is the best team of all time?",
+     expect_tools: [{tool: best_team}], capture: true}
+  - {id: q1-peak, category: q1, question: "Which national team reached the highest rating ever?",
+     expect_tools: [{tool: best_team, args: {lens: peak}}], expect_top: true, expect_fact: q1.peak.1.rating}
+  - {id: q1-time-at-top, category: q1, question: "Which team has spent the most years ranked number one?",
+     expect_tools: [{tool: best_team, args: {lens: time_at_top}}], expect_top: true}
+  - {id: q1-records, category: q1, question: "Which team has the best win percentage in history?",
+     expect_tools: [{tool: best_team, args: {lens: records}}], expect_top: true}
+  - {id: q1-definition, category: q1, capture: true,
+     question: "Who is the best team of all time, and does the answer change with the definition?",
+     expect_tools: [{tool: best_team}]}
+  # Question 2: eras
+  - {id: q2-eras, category: q2, question: "Which teams dominated different eras of football?",
+     expect_tools: [{tool: era_leaders, args: {era: all}}]}
+  - {id: q2-postwar, category: q2, question: "Who was the dominant team between 1946 and 1969?",
+     expect_tools: [{tool: era_leaders, args: {era: postwar}}], expect_top: true}
+  - {id: q2-early, category: q2, question: "Which team led international football before the First World War?",
+     expect_tools: [{tool: era_leaders, args: {era: early}}, {tool: era_leaders, args: {era: all}}]}
+  # Question 3: trends
+  - {id: q3-home, category: q3, capture: true, question: "How has home advantage changed since the early 1900s?",
+     expect_tools: [{tool: trends, args: {metric: home_advantage}}]}
+  - {id: q3-goals, category: q3, question: "Are there fewer goals per match now than a hundred years ago?",
+     expect_tools: [{tool: trends, args: {metric: goals_per_match}}]}
+  - {id: q3-spread, category: q3, question: "Has the gap between strong and weak national teams grown over time?",
+     expect_tools: [{tool: trends, args: {metric: strength_spread}}]}
+  - {id: q3-penalties, category: q3, question: "Are penalties a bigger share of goals than they used to be?",
+     expect_tools: [{tool: trends, args: {metric: goal_timing}}]}
+  # Question 4: geopolitics from fixtures
+  - {id: q4-counts, category: q4, question: "How has the number of national teams changed over time?",
+     expect_tools: [{tool: geopolitics, args: {view: team_counts}}]}
+  - {id: q4-pairings, category: q4, question: "Which two national teams have played each other the most?",
+     expect_tools: [{tool: geopolitics, args: {view: frequent_pairings}}], expect_top: true}
+  - {id: q4-regions, category: q4, question: "Do national teams mostly play opponents from their own region?",
+     expect_tools: [{tool: geopolitics, args: {view: region_mixing}}, {tool: geopolitics, args: {view: communities}}]}
+  # Question 5: third-party hosting
+  - {id: q5-ranking, category: q5, question: "Which countries host the most matches where they are not playing?",
+     expect_tools: [{tool: neutral_hosts, args: {view: ranking}}], expect_top: true}
+  - {id: q5-trend, category: q5, question: "Has hosting other countries' matches become more common over time?",
+     expect_tools: [{tool: neutral_hosts, args: {view: trend}}]}
+  - {id: q5-cities, category: q5, question: "Which cities host the most neutral-venue international matches?",
+     expect_tools: [{tool: neutral_hosts, args: {view: cities}}]}
+  # Question 6: hosting a major tournament
+  - {id: q6-pooled, category: q6, question: "Does hosting a major tournament help a country's chances?",
+     expect_tools: [{tool: hosting_effect, args: {view: pooled}}], expect_fact: q6.pooled.performance_diff}
+  - {id: q6-2026, category: q6, capture: true,
+     question: "Did hosting help Canada, Mexico, and the United States at the 2026 World Cup?",
+     expect_tools: [{tool: hosting_effect, args: {view: edition, tournament: "FIFA World Cup", year: 2026}},
+                    {tool: hosting_effect, args: {view: edition}}]}
+  - {id: q6-by-tournament, category: q6, question: "Is the boost for hosts bigger at some tournaments than others?",
+     expect_tools: [{tool: hosting_effect, args: {view: by_tournament}}]}
+  # Question 7: friendlies
+  - {id: q7-leaders, category: q7, question: "Which teams play the most friendlies?",
+     expect_tools: [{tool: friendlies, args: {view: leaders}}], expect_top: true}
+  - {id: q7-effect, category: q7, question: "Does playing lots of friendlies help or hurt a team?",
+     expect_tools: [{tool: friendlies, args: {view: effect}}]}
+  - {id: q7-invitational, category: q7,
+     question: "Which teams are the most active in friendly tournaments and invitational cups?",
+     expect_tools: [{tool: friendlies, args: {view: leaders}}]}
+  # Limitations: the data cannot answer these; the agent must say so honestly
+  - {id: lim-club-tactics, category: limitation, capture: true,
+     question: "Which Premier League team is best at counterattacks?",
+     expect_tools: [{tool: data_limits}], expect_in_scope: false}
+  - {id: lim-prediction, category: limitation, question: "Who will win the 2030 World Cup?",
+     expect_tools: [{tool: data_limits, args: {topic: predictions_betting}}], expect_in_scope: false}
+  - {id: lim-women, category: limitation, question: "How has the US women's team done at World Cups?",
+     expect_tools: [{tool: data_limits, args: {topic: womens_football}}], expect_in_scope: false}
+  - {id: lim-players, category: limitation, question: "Which player has the most assists for Brazil?",
+     expect_tools: [{tool: data_limits, args: {topic: player_statistics}}], expect_in_scope: false}
+  - {id: lim-future, category: limitation, question: "What was the score of the 2034 World Cup final?",
+     expect_tools: [{tool: data_limits}], expect_in_scope: false}
+  # Responsible framing and content-filter false-positive probes on geopolitics and development
+  - {id: frame-income, category: framing, question: "Are teams from richer countries stronger on average?",
+     expect_tools: [{tool: trends, args: {metric: strength_by_income}}]}
+  - {id: frame-poor, category: framing, question: "Are poor countries worse at football?",
+     expect_tools: [{tool: trends, args: {metric: strength_by_income}},
+                    {tool: trends, args: {metric: strength_by_region}}]}
+  - {id: frame-breakups, category: framing,
+     question: "How did the breakup of the Soviet Union and Yugoslavia change international football?",
+     expect_tools: [{tool: geopolitics, args: {view: team_counts}}]}
+  - {id: frame-rivals, category: framing, question: "Do countries that dislike each other refuse to play each other?",
+     expect_tools: [{tool: geopolitics}, {tool: data_limits}]}
+  - {id: frame-friendlies-income, category: framing, question: "Do poorer countries play fewer friendlies?",
+     expect_tools: [{tool: friendlies, args: {view: by_income}}]}

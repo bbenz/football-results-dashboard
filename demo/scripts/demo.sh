@@ -14,8 +14,14 @@
 #   logs          Show the last Compose log lines.
 #   test          Run the no-data guard, ruff, mypy, and the tests.
 #   guard         Run the no-data guard on the index and the full history.
+#   install-hook  Optional: install a git pre-commit hook that runs the no-data guard.
+#
+# Azure commands (not run by local setup)
+#   azure-foundation, azure-platform, upload-data, build-push, aks-deploy, aca-deploy,
+#   ingest-aks, ingest-aca, smoke, allow-ip, switch-model <deployment>, teardown --dry-run
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/azure.sh"
 
 command="${1:-help}"
 shift || true
@@ -61,5 +67,22 @@ case "$command" in
     "$PYTHON" "$ROOT/demo/scripts/check_no_data.py"
     "$PYTHON" "$ROOT/demo/scripts/check_no_data.py" --history
     ;;
-  *) sed -n '2,17p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
+  install-hook)
+    printf '#!/bin/sh\n# Installed by demo install-hook: refuse commits that would add data.\nexec python demo/scripts/check_no_data.py\n' > "$ROOT/.git/hooks/pre-commit"
+    chmod +x "$ROOT/.git/hooks/pre-commit"
+    echo "pre-commit hook installed: $ROOT/.git/hooks/pre-commit"
+    ;;
+  azure-foundation) azure_foundation ;;
+  azure-platform) azure_platform ;;
+  upload-data) upload_data ;;
+  build-push) build_push ;;
+  aks-deploy) aks_deploy ;;
+  aca-deploy) aca_deploy ;;
+  ingest-aks) ingest_aks ;;
+  ingest-aca) ingest_aca ;;
+  smoke) smoke ;;
+  allow-ip) allow_ip ;;
+  switch-model) switch_model "${1:-}" ;;
+  teardown) teardown "${1:-}" ;;
+  *) sed -n '2,22p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
 esac

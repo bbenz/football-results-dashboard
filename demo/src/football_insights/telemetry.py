@@ -62,6 +62,23 @@ def span_to_dict(span: ReadableSpan, service: str) -> dict[str, Any]:
     }
 
 
+class StampAttributes(SpanProcessor):
+    """Copies the platform, region, and image digest onto every span, so they are queryable dimensions in
+    Application Insights (customDimensions) whichever exporter is used."""
+
+    def __init__(self, attributes: dict[str, str]) -> None:
+        self.attributes = attributes
+
+    def on_start(self, span: Any, parent_context: Any = None) -> None:
+        span.set_attributes(self.attributes)
+
+    def shutdown(self) -> None:
+        return None
+
+    def force_flush(self, timeout_millis: int = 30000) -> bool:
+        return True
+
+
 class SpanCollector(SpanProcessor):
     """Keeps recent spans in memory, grouped by trace, for the local trace view."""
 
@@ -169,7 +186,8 @@ def configure(service: str, settings: Settings, extra_resource: dict[str, str] |
     attributes.update(extra_resource or {})
     resource = Resource.create(attributes)
     _collector = SpanCollector(service)
-    processors: list[SpanProcessor] = [_collector]
+    stamp = StampAttributes({k: attributes[k] for k in ("app.platform", "cloud.region", "app.image_digest")})
+    processors: list[SpanProcessor] = [stamp, _collector]
     if settings.platform_name.lower() == "local":
         exporter = JsonLinesExporter(settings.local_trace_dir / f"{service}.jsonl", service)
         processors.append(SimpleSpanProcessor(exporter))

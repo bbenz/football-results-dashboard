@@ -1,0 +1,55 @@
+// KQL for the football insights app in Application Insights (workspace-based).
+// Both platforms export to the same resource; cloud_RoleName is the service (web, insights, ingest) and
+// customDimensions["app.platform"] is Local, AKS, or ACA. Custom span attributes land in customDimensions.
+// Replace <trace id> with the ID the app shows under each answer.
+
+// 1. One end-to-end trace: web request -> insights -> agent -> tools and model calls.
+union requests, dependencies
+| where operation_Id == "<trace id>"
+| project timestamp, itemType, cloud_RoleName, name, duration,
+          platform = tostring(customDimensions["app.platform"]),
+          tool = tostring(customDimensions["gen_ai.tool.name"]),
+          model = tostring(customDimensions["gen_ai.request.model"])
+| order by timestamp asc
+
+// 2. Requests by platform and service over the last hour.
+requests
+| where timestamp > ago(1h)
+| summarize requests = count(), p50_ms = percentile(duration, 50), p95_ms = percentile(duration, 95),
+            failures = countif(success == false)
+  by platform = tostring(customDimensions["app.platform"]), cloud_RoleName
+| order by platform asc, cloud_RoleName asc
+
+// 3. Model calls: latency and tokens per platform and deployment.
+dependencies
+| where timestamp > ago(1d) and name startswith "chat "
+| summarize calls = count(), p50_ms = percentile(duration, 50), p95_ms = percentile(duration, 95),
+            input_tokens = sum(toint(customDimensions["gen_ai.usage.input_tokens"])),
+            output_tokens = sum(toint(customDimensions["gen_ai.usage.output_tokens"]))
+  by platform = tostring(customDimensions["app.platform"]), deployment = tostring(customDimensions["gen_ai.request.model"])
+
+// 4. Answers: live or not, grounding result, and estimated cost per answer and per day.
+dependencies
+| where timestamp > ago(7d) and name startswith "invoke_agent"
+| extend platform = tostring(customDimensions["app.platform"]), deployment = tostring(customDimensions["gen_ai.request.model"]),
+         status = tostring(customDimensions["app.narrative_status"]), grounding = tostring(customDimensions["app.grounding.status"]),
+         cost = todouble(customDimensions["app.estimated_cost_usd"])
+| summarize answers = count(), live = countif(status == "live"), grounded = countif(grounding in ("passed", "passed_after_retry")),
+            p50_ms = percentile(duration, 50), p95_ms = percentile(duration, 95),
+            cost_usd = sum(cost), cost_per_answer_usd = avg(cost)
+  by day = bin(timestamp, 1d), platform, deployment
+| order by day desc
+
+// 5. Answers that should have been live but were not (a hidden model failure shows up here).
+dependencies
+| where timestamp > ago(1d) and name startswith "invoke_agent"
+| where tostring(customDimensions["app.narrative_mode"]) == "live" and tostring(customDimensions["app.narrative_status"]) != "live"
+| project timestamp, operation_Id, platform = tostring(customDimensions["app.platform"]),
+          status = tostring(customDimensions["app.narrative_status"]), error = tostring(customDimensions["error.type"])
+
+// 6. Tool calls: which tools the agent uses and how long they take.
+dependencies
+| where timestamp > ago(1d) and name startswith "execute_tool"
+| summarize calls = count(), avg_ms = avg(duration), p95_ms = percentile(duration, 95)
+  by tool = tostring(customDimensions["gen_ai.tool.name"]), platform = tostring(customDimensions["app.platform"])
+| order by calls desc
