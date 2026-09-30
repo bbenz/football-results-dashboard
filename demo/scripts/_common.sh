@@ -65,7 +65,8 @@ update_token_file() {
 
 start_token_refresh() {
   stop_token_refresh
-  ( while true; do sleep 900; update_token_file >/dev/null 2>&1; done ) &
+  # Detached from this command's output, so a caller that pipes it (for example into tee) isn't held open by the loop.
+  ( while true; do sleep 900; update_token_file >/dev/null 2>&1; done ) </dev/null >/dev/null 2>&1 &
   echo $! > "$REFRESH_PID_FILE"
   echo "token refresh running every 15 minutes in the background (demo down stops it)"
 }

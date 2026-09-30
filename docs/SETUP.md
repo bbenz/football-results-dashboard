@@ -69,7 +69,24 @@ az login
 ./demo/scripts/demo.sh up --live-model
 ```
 
-Set `FOUNDRY_PROJECT_ENDPOINT` in `.env` first (`demo azure-foundation` prints it). Containers can't use your Azure CLI sign-in, so `-LiveModel` writes a short-lived access token from your sign-in to `.local/secrets/tokens.json` (ignored by git) and refreshes it every 15 minutes in the background. No key is involved anywhere. `demo down` stops the refresh and deletes the file.
+Set `FOUNDRY_PROJECT_ENDPOINT` in `.env` first (`demo azure-foundation` prints it). Containers can't use your Azure CLI sign-in, so `-LiveModel` (bash: `--live-model`) writes a short-lived access token from your sign-in to `.local/secrets/tokens.json` (ignored by git) and refreshes it every 15 minutes in the background. No key is involved anywhere. If the command says you aren't signed in, run `az login` and try again.
+
+- **You don't need to stop a running app first.** The command rebuilds the images and recreates the containers with the live settings; the curated data stays in its Docker volume. It takes about a minute, and the page can fail for a few seconds while the containers restart. Refresh after `up OK`: the badge then shows `AI narrative: live`.
+- **Keep the refresh running.** In PowerShell, the token refresh runs as a background job in the terminal where you started it, so keep that terminal open. In bash, it runs as a background process that `demo down` stops. If the refresh stops, live answers fail once the last token expires, usually within an hour or so, and the answer page says the AI narrative is unavailable. Run the command again to start a new refresh.
+
+To turn the model off again, stop everything and start without it:
+
+```powershell
+./demo/scripts/demo.ps1 down
+./demo/scripts/demo.ps1 up
+```
+
+```bash
+./demo/scripts/demo.sh down
+./demo/scripts/demo.sh up
+```
+
+`down` stops the token refresh and deletes the token file. A plain `up` on its own would turn the narrative off but leave the refresh running.
 
 ## 5. Build the curated store without Docker (optional)
 
