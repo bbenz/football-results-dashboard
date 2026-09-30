@@ -151,6 +151,12 @@ IMAGE_TAG=<v2-tag> ./demo/scripts/demo.sh build-push --output v2
 
 The command updates the ACA insights app and AKS insights deployment, then waits for the AKS rollout. It does not rebuild images.
 
+## Cost
+
+At demo scale, both platforms together cost roughly $8–13 a day before monitoring ingestion and model tokens. Most of that is the AKS Automatic control plane and its node; ACA alone costs under $3 a day, and less when idle. [AKS-VS-ACA.md](AKS-VS-ACA.md#estimated-daily-cost-at-demo-scale) has the dated list prices behind these estimates.
+
+Model tokens are billed per answer, and each answer page shows its tokens and estimated cost. `azure-foundation` creates a monthly budget of `BUDGET_AMOUNT` US dollars on the resource group. It emails `BUDGET_CONTACT_EMAIL` at 50%, 80%, and 100% of actual spend and at 100% of forecast spend. Tear everything down when you're done.
+
 ## Teardown
 
 Preview everything in the resource group first:

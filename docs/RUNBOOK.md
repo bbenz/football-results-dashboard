@@ -147,6 +147,8 @@ Type each question from [ONSTAGE-SCRIPT.md](ONSTAGE-SCRIPT.md) into the question
 - **The grounding badge shows "fallback".** That is the safety net working. Say so: the model wrote a number no tool returned, so the page shows the evidence instead.
 - **Content filter or "filtered" status on a question.** Say that Foundry's content filter blocked it, show that the evidence still rendered, and move on. It is also a good lead-in to segment 7.
 
+**Code bookmarks:** `demo/src/football_insights/analytics/q6_hosting.py` (the `edition` view), `demo/src/football_insights/agent/grounding.py`, `demo/src/football_insights/agent/instructions.py`.
+
 ## Segment 5: AKS versus ACA side by side (30:00–39:00; hard stop 40:00)
 
 1. **[B]** Start the load test first, in the second terminal tab: `demo load-test both -Rps 20 -Seconds 45`. It targets deterministic pages only, never the model. Before and after, it prints AKS pods and autoscalers, and ACA replica counts.
@@ -166,7 +168,7 @@ Type each question from [ONSTAGE-SCRIPT.md](ONSTAGE-SCRIPT.md) into the question
 
 ## Segment 6: develop and ship (39:00–46:00; hard stop 47:00)
 
-Before the stream, the Copilot app is open on branch `stage-upsets`, created from `main`.
+Before the stream, the Copilot app is open on branch `stage-upsets`, reset to `main` (see the rehearsal checklist).
 
 1. **[B]** Paste the Copilot prompt from [ONSTAGE-SCRIPT.md](ONSTAGE-SCRIPT.md) into the GitHub Copilot app and let it work. Narrate what it changes:
    - A new tool module.
@@ -174,10 +176,10 @@ Before the stream, the Copilot app is open on branch `stage-upsets`, created fro
    - The card text.
    - A test.
 2. **[B]** Run `demo pytest tests/test_q8_upsets.py`. Expected: all tests pass. The tool contract test covers the new tool automatically when the full suite runs.
-3. **If anything deviates** (errors, a failing test, or an unexpected edit), stop and switch to the prepared commit:
+3. **If anything deviates** (errors, a failing test, or an unexpected edit), stop and switch to the prepared commit. The stash keeps Copilot's attempt for later and touches only the code and docs folders:
 
    ```powershell
-   git stash push -u -m copilot-attempt; git switch v2-upsets; demo pytest tests/test_q8_upsets.py
+   git stash push -u -m copilot-attempt -- demo docs README.md; git switch v2-upsets; demo pytest tests/test_q8_upsets.py
    ```
 
    Say: "Copilot's output varies from run to run, so here is the prepared commit from rehearsal."
@@ -192,6 +194,8 @@ Before the stream, the Copilot app is open on branch `stage-upsets`, created fro
 
 - **Rollout errors or passes 45:30.** Stop and show the rollout output and ACA traffic table from rehearsal. Say they are recorded.
 - **Rollback leaves a split.** Run `demo rollback aca` again, then continue.
+
+**Code bookmarks:** the new files Copilot creates; on `v2-upsets`, `demo/src/football_insights/analytics/q8_upsets.py` and `demo/tests/test_q8_upsets.py`; `demo/scripts/azure.ps1` (`Invoke-RolloutV2`, `Invoke-Rollback`).
 
 ## Segment 7: operate (46:00–51:00; hard stop 52:00)
 
@@ -209,6 +213,8 @@ Before the stream, the Copilot app is open on branch `stage-upsets`, created fro
 5. **[B]** Content filtering: Foundry's filters are on for both deployments. Show that a filtered answer is labeled "filtered" while its evidence still renders (use the rehearsal recording if nothing was filtered live).
 
 **If it fails:** The trace view is empty? Spans stay in memory only on the replica that served the request. Refresh the answer page and use its trace ID, or open a trace from the snapshot.
+
+**Code bookmarks:** `demo/src/football_insights/telemetry.py`, `demo/src/football_insights/agent/loop.py` (the `invoke_agent` and `chat` spans), `demo/observability/queries.kql`, `demo/src/football_insights/evaluation/__init__.py` (the decision rule).
 
 ## Segment 8: hackathon launchpad (51:00–53:00; hard stop 54:00)
 
@@ -265,7 +271,7 @@ git switch v2-upsets; $env:IMAGE_TAG = 'v2-upsets'; demo build-push -Output v2; 
   - [ ] a replay page;
   - [ ] `demo up -LiveModel`.
 - [ ] After a good run, run `demo snapshot both` and check that `index.html` opens with the network off.
-- [ ] Recreate `stage-upsets` from `main` for the next run: `git switch main; git branch -D stage-upsets; git switch -c stage-upsets`.
+- [ ] Reset the Copilot branch for the next run. This discards the previous attempt's edits and removes its new files in `demo/` and `docs/`: `git switch -f -C stage-upsets main; git clean -fd -- demo docs`.
 
 ### Day-of timeline
 
@@ -274,7 +280,7 @@ git switch v2-upsets; $env:IMAGE_TAG = 'v2-upsets'; demo build-push -Output v2; 
 | 60 min before | Run `demo preflight`; every line must be PASS. Fix anything else now. |
 | 45 min before | Run `demo reset`, then `demo smoke`. |
 | 30 min before | Warm up: ask one prepared question on each platform, so each model deployment has served a request, and open each card once. |
-| 20 min before | Set up the window layout. Load the ACA and AKS tabs and the Data page. Open the Copilot app on `stage-upsets`. Open the evidence folder. |
+| 20 min before | Set up the window layout. Load the ACA and AKS tabs and the Data page. Reset the Copilot branch (`git switch -f -C stage-upsets main; git clean -fd -- demo docs`) and open the Copilot app on it. Open the evidence folder. |
 | 10 min before | Screen-hygiene checklist below. Confirm with the producer which window or screen is captured. |
 | 2 min before | Close everything not in the layout. Run `demo preflight` once more if time allows. |
 
@@ -309,4 +315,5 @@ Check them all with `demo preflight`. Re-authenticating fits inside a segment.
 ## After the stream
 
 - Run `demo reset` to return AKS to v1 and the default model.
+- Return the repository to `main` (`git switch -f main`). If you switched to the prepared commit, `git stash list` shows Copilot's saved attempt as `copilot-attempt`; drop it by its name (for example `git stash drop stash@{0}`) when you no longer need it.
 - Leave both deployments running only as long as agreed. Run `demo teardown -DryRun` to list what will be deleted. The real `demo teardown` deletes the whole resource group, and only after you type its name, so run it once the deletion is approved.

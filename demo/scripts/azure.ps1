@@ -523,7 +523,8 @@ function Invoke-Preflight {
     } catch { Write-Check 'local token file not near expiry' $false $_.Exception.Message; $ok = $false }
     $kaggle = (Test-Path (Join-Path $HOME '.kaggle/kaggle.json')) -or [bool]$env:KAGGLE_API_TOKEN
     Write-Host "INFO: Kaggle credential present: $kaggle"
-    Test-VersionPin 'az version' (az version --query '"azure-cli"' -o tsv) $env:PINNED_AZ
+    # Read the version from JSON: JMESPath's quoted "azure-cli" loses its quotes on the way to az.cmd.
+    Test-VersionPin 'az version' ((az version -o json | ConvertFrom-Json).'azure-cli') $env:PINNED_AZ
     if ($LASTEXITCODE -ne 0) { $ok = $false }
     Test-VersionPin 'kubectl version' ((kubectl version --client=true -o json | ConvertFrom-Json).clientVersion.gitVersion) $env:PINNED_KUBECTL
     if ($LASTEXITCODE -ne 0) { $ok = $false }

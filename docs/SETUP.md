@@ -89,6 +89,7 @@ demo test
 This runs the no-data guard, `ruff`, `mypy`, and `pytest`. Unit tests use small synthetic fixtures with fictional teams. Tests marked `realdata` also run when the downloaded data is present and are skipped otherwise.
 
 - `demo pytest tests/test_q3_trends.py` runs only the named tests, without the other checks.
+- Tests marked `live` call the model deployments with your own sign-in. They run only when `FOUNDRY_PROJECT_ENDPOINT` is set and the data is downloaded, and each run costs a little. They check that every question gets a live, grounded answer from each allowed deployment, and that repeated answers cite identical numbers.
 - `demo guard` checks the index and the full git history for data files.
 - `demo install-hook` adds a git pre-commit hook that runs the guard before every commit.
 
