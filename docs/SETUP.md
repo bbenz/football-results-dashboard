@@ -78,7 +78,7 @@ demo ingest
 
 `ingest` verifies the raw files, then writes a versioned curated store to `.local/curated/` (ignored by git): Parquet tables, a manifest with checksums, and a data-quality report. Running it again on the same inputs reuses the same version with identical checksums, on any operating system.
 
-To run the services on your machine instead of in containers, open two terminals and run `python -m football_insights.insights` and `python -m football_insights.web` with `PYTHONPATH=demo/src`, from the repository root, using the Python in `.venv`. Code running on your machine uses your Azure CLI sign-in for the models when `FOUNDRY_PROJECT_ENDPOINT` is set.
+To run the services on your machine instead of in containers, open two terminals and run `python -m football_insights.insights` and `python -m football_insights.web` with `PYTHONPATH=demo/src`, from the repository root, using the Python in `.venv`. They listen on `127.0.0.1` only, unless you set `BIND_HOST`. Code running on your machine uses your Azure CLI sign-in for the models when `FOUNDRY_PROJECT_ENDPOINT` is set.
 
 ## 6. Tests and checks
 
