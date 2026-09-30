@@ -103,6 +103,20 @@ def test_data_page_and_trace_validation(apps) -> None:  # type: ignore[no-untype
     assert get(web, "/trace/" + "0" * 32).status_code == 200
 
 
+def test_an_older_web_shows_the_cards_it_knows_during_a_rollout(apps, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    # During a v2 rollout, a v1 web revision can reach a v2 insights that returns a card it doesn't know.
+    import dataclasses
+
+    from football_insights.cards import CARDS
+    from football_insights.insights import app as insights_module
+
+    monkeypatch.setattr(insights_module, "CARDS", (*CARDS, dataclasses.replace(CARDS[0], number=99)))
+    web, _ = apps
+    html = get(web, "/", {"x-forwarded-for": "198.51.100.77"}).text
+    assert "not ready" not in html
+    assert html.count('<section class="card"') == len(CARDS)
+
+
 def test_every_card_view_renders_without_the_model(apps) -> None:  # type: ignore[no-untyped-def]
     from football_insights.cards import CARDS, default_view, views
 
