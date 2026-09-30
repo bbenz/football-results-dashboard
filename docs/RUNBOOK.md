@@ -210,7 +210,7 @@ Before the stream, the Copilot app is open on branch `stage-upsets`, reset to `m
 4. **[B]** Show the evaluation report from rehearsal (`EVIDENCE_DIR/eval/`) and how the rule chose the serving deployment. The rule:
    - A deployment qualifies with a grounding pass rate ≥ 95%, tool selection ≥ 90%, all limitation and framing cases passing, ≥ 95% live narratives, and p95 ≤ 25 s.
    - Among qualifying deployments, the cheaper per answer wins, unless the other is at least 5 points more accurate at tool selection.
-5. **[B]** Content filtering: Foundry's filters are on for both deployments. Show that a filtered answer is labeled "filtered" while its evidence still renders (use the rehearsal recording if nothing was filtered live).
+5. **[B]** Content filtering: Foundry's filters are on for every deployment. Show that a filtered answer is labeled "filtered" while its evidence still renders (use the rehearsal recording if nothing was filtered live).
 
 **If it fails:** The trace view is empty? Spans stay in memory only on the replica that served the request. Refresh the answer page and use its trace ID, or open a trace from the snapshot.
 
@@ -236,7 +236,7 @@ Keep the decision guide on screen. Short answers:
 
   Check the license first: detailed club event data is usually commercial.
 - **What does it cost to run?** See [AKS-VS-ACA.md](AKS-VS-ACA.md#estimated-daily-cost-at-demo-scale). An idle ACA replica costs cents per day, while an AKS Automatic cluster costs dollars per day for its control plane and node. Model tokens are billed per answer, and the app shows each answer's tokens and estimated cost. A budget alert watches the total.
-- **Why deploy two models, and how was one chosen?** They trade quality, latency, and price: GPT-6 Astra costs five times as much as GPT-6 Sol per token. The evaluation suite ran both repeatedly against the same cases and picked one with a written rule (see segment 7). Switching is one setting, `demo switch-model`, with no rebuild.
+- **Why GPT-6 Sol, and could you use two models?** Models trade quality, latency, and price: GPT-6 Astra costs five times as much as GPT-6 Sol per token. The evaluation suite asks the serving model the same cases repeatedly, and a written rule decides whether it may serve. With both deployed, the same rule picks between them (see segment 7). Switching is one setting, `demo switch-model`, with no rebuild.
 - **Could an open or self-hosted model replace them?** Yes, if it supports tool calling and structured output: deploy it, add it to the allowed deployments, run `demo eval`, and switch. The grounding check protects the numbers whatever model you use.
 
 ## Before the stream
@@ -246,8 +246,8 @@ Keep the decision guide on screen. Short answers:
 | When | Date | Done when |
 | --- | --- | --- |
 | T-14 | Sep 30 | Repository and ground truth ready; subscription, region, quota, and budget confirmed |
-| T-12 | Oct 2 | Local app complete; Foundry foundation with both model deployments provisioned |
-| T-10 | Oct 4 | All seven questions answered live on both models; evaluation has chosen the serving deployment |
+| T-12 | Oct 2 | Local app complete; Foundry foundation with the model deployments provisioned |
+| T-10 | Oct 4 | All seven questions answered live on every deployed model; evaluation has confirmed the serving deployment |
 | T-8 | Oct 6 | Both platforms deployed from the docs; `demo smoke` passes; docs updated from what the deployment proved |
 | T-7 | Oct 7 | First timed rehearsal on the presenter machine with pinned tools. Then `demo snapshot both`, `demo capture`, and a screen recording. Rehearse the Copilot moment and build v2 (below). |
 | T-4 | Oct 10 | Second timed rehearsal after `demo reset`; runbook and on-stage script frozen; Reactor tech check done |

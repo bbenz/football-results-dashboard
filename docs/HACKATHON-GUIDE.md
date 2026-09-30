@@ -41,7 +41,7 @@ The same pattern works for other tabular data you're allowed to use:
 ## Swap the model
 
 - **Switch between the two deployments.** Which deployment serves answers is one setting, `AI_MODEL_DEPLOYMENT`. Locally, set it in `.env`. In Azure, run `demo switch-model gpt-6-sol`; it updates both platforms without rebuilding images.
-- **Add another deployment.** Add it to `demo/infra/foundation.bicep` with a pinned version and `versionUpgradeOption: 'NoAutoUpgrade'`. Add its name to `AI_ALLOWED_DEPLOYMENTS` and its token prices to `demo/src/football_insights/agent/pricing.py`, then compare it with `demo eval` before switching.
+- **Add another deployment.** Add the model's name and pinned version to `modelCatalog` in `demo/infra/foundation.bicep`, add the deployment name to `AI_ALLOWED_DEPLOYMENTS` (which also tells `demo azure-foundation` to create it, with `versionUpgradeOption: 'NoAutoUpgrade'`), and add its token prices to `demo/src/football_insights/agent/pricing.py`. Then compare it with `demo eval` before switching.
 - **What a replacement needs.** Tool calling with strict JSON schemas and structured output, through the Responses API. The grounding check doesn't change: whatever the model writes, a number it didn't get from a tool never reaches the page as fact.
 
 ## Deploy to your own subscription
@@ -50,7 +50,7 @@ The same pattern works for other tabular data you're allowed to use:
 2. Follow [DEPLOYMENT.md](DEPLOYMENT.md). You can deploy one platform or both:
    - **ACA only:** `azure-foundation`, `azure-platform`, `upload-data`, `build-push`, then `aca-deploy`.
    - **AKS only:** the same, with `aks-deploy` instead of `aca-deploy`.
-3. When your address changes, `demo allow-ip` updates `ALLOWED_CIDRS` and both platforms' allow-lists.
+3. When your address changes, `demo allow-ip` updates `ALLOWED_CIDRS` and both platforms' allow-lists. Behind a VPN or a secure access client, Azure can see a different address than IP-echo sites do: pass the right one with `demo allow-ip <address>` (see [Restrict access to your IP](DEPLOYMENT.md#restrict-access-to-your-ip)).
 
 [AKS-VS-ACA.md](AKS-VS-ACA.md) helps you choose.
 

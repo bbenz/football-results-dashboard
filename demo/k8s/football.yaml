@@ -45,6 +45,9 @@ spec:
         azure.workload.identity/use: "true"
     spec:
       serviceAccountName: insights
+      # Kubernetes would otherwise give each pod WEB_PORT=tcp://<ip>:8080 and INSIGHTS_PORT=tcp://<ip>:8081 for the
+      # Services below, overriding the app's WEB_PORT and INSIGHTS_PORT settings and stopping it at startup.
+      enableServiceLinks: false
       securityContext:
         runAsNonRoot: true
         seccompProfile: { type: RuntimeDefault }
@@ -102,6 +105,7 @@ spec:
         azure.workload.identity/use: "true"
     spec:
       serviceAccountName: web
+      enableServiceLinks: false
       securityContext:
         runAsNonRoot: true
         seccompProfile: { type: RuntimeDefault }
@@ -163,6 +167,24 @@ spec:
   ports:
     - { name: http, port: 8080, targetPort: 8080 }
 ---
+# Keeps the caller's address. With the default externalTrafficPolicy "Cluster", traffic reaches the gateway from
+# node addresses, so web's per-client rate limits would count per node instead of per caller. "Local" needs the
+# add-on's port 80 health-probe annotations unset: https://learn.microsoft.com/en-us/azure/aks/istio-gateway-api
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: football-web-gateway
+  namespace: football
+data:
+  service: |
+    spec:
+      externalTrafficPolicy: Local
+    metadata:
+      annotations:
+        service.beta.kubernetes.io/port_80_health-probe_port:
+        service.beta.kubernetes.io/port_80_health-probe_protocol:
+        service.beta.kubernetes.io/port_80_health-probe_request-path:
+---
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
@@ -176,6 +198,10 @@ spec:
   infrastructure:
     annotations:
       service.beta.kubernetes.io/azure-allowed-ip-ranges: "${ALLOWED_CIDRS}"
+    parametersRef:
+      group: ""
+      kind: ConfigMap
+      name: football-web-gateway
   listeners:
     - name: http
       protocol: HTTP

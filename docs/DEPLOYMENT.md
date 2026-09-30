@@ -7,6 +7,7 @@ This guide deploys the same football insights images to AKS Automatic and Azure 
 ## Prerequisites
 
 - PowerShell 7 or Git Bash, Docker Desktop, Azure CLI with Bicep, `kubectl`, `kubelogin`, and access to an Azure subscription.
+- Register the `Microsoft.PolicyInsights` resource provider once per subscription: `az provider register --namespace Microsoft.PolicyInsights --wait`. AKS Automatic's deployment safeguards use Azure Policy, and a Bicep deployment only registers the providers of the resources it declares ([resource providers](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-providers-and-types), 2026-02-27). Registering is free. `aks-deploy` stops early if the provider isn't registered.
 - Copy `.env.example` to `.env` and fill in presenter-specific values there, not in tracked files.
 - Required operator values: `AZURE_SUBSCRIPTION_ID`, `AZURE_LOCATION`, `AZURE_RESOURCE_GROUP`, `EVENT_DATE`, `TEARDOWN_DATE`, `FOUNDRY_RESOURCE_NAME`, `FOUNDRY_PROJECT_NAME`, `LOG_ANALYTICS_NAME`, `APPINSIGHTS_NAME`, `ACR_NAME`, `STORAGE_ACCOUNT_NAME`, `AKS_CLUSTER_NAME`, `ACA_ENVIRONMENT_NAME`, `ACA_WEB_APP_NAME`, `ACA_INSIGHTS_APP_NAME`, `ACA_INGEST_JOB_NAME`, six identity names, `ALLOWED_CIDRS`, `BUDGET_AMOUNT`, `BUDGET_CONTACT_EMAIL`, and the data location if not `data/`.
 - Defaults set by the scripts if omitted: `PROJECT_TAG=football-insights`, `AKS_KUBERNETES_VERSION=1.36`, `AI_MODEL_DEPLOYMENT=gpt-6-astra`, `DEFAULT_MODEL_DEPLOYMENT=gpt-6-astra`, `AI_ALLOWED_DEPLOYMENTS=gpt-6-astra,gpt-6-sol`, `BUDGET_START_DATE` as the first day of the current month, and `OPERATOR_PRINCIPAL_ID` from `az ad signed-in-user show`.
@@ -54,7 +55,7 @@ This guide deploys the same football insights images to AKS Automatic and Azure 
 
 ACA pulls images with each app's user-assigned identity and sets `AZURE_CLIENT_ID` for Azure SDKs. AKS uses Microsoft Entra Workload ID; the scripts derive service account client IDs from deployment outputs. AKS access also requires the operator cluster-admin Azure RBAC assignment from `aks.bicep`, and each kubectl-using command reconnects and converts kubeconfig with kubelogin so a fresh terminal does not hang on device-code auth.
 
-Insights is private on both platforms. AKS keeps `insights` as `ClusterIP` and smoke fails if unexpected namespace Services are `LoadBalancer`. ACA uses an internal ingress FQDN for insights; smoke expects an external `/healthz` request to fail.
+Insights is private on both platforms. AKS keeps `insights` as `ClusterIP` and smoke fails if unexpected namespace Services are `LoadBalancer`. ACA uses an internal ingress FQDN for insights; its name resolves to the environment's public address, ACA answers outside callers with 404, and smoke fails if an external `/healthz` request succeeds.
 
 ## Restrict access to your IP
 
@@ -66,7 +67,25 @@ Insights is private on both platforms. AKS keeps `insights` as `ClusterIP` and s
 ./demo/scripts/demo.sh allow-ip
 ```
 
-The command detects your public IP, writes `ALLOWED_CIDRS=<ip>/32` to `.env`, replaces ACA access restrictions with `allow-0`, and patches only the AKS Gateway infrastructure annotation `service.beta.kubernetes.io/azure-allowed-ip-ranges`. It updates whichever platforms are deployed, and it does not re-apply the full AKS app manifest, so image and model rollout state is preserved. Set `ALLOWED_CIDRS` in `.env` before the first deployment; use `allow-ip` when your address changes.
+The command detects your public IP, writes `ALLOWED_CIDRS=<ip>/32` to `.env`, sets ACA access restrictions `allow-0` onward (adding the new rules before removing old ones, because an app with no rules accepts every address), and patches only the AKS Gateway infrastructure annotation `service.beta.kubernetes.io/azure-allowed-ip-ranges`. It updates whichever platforms are deployed, and it does not re-apply the full AKS app manifest, so image and model rollout state is preserved. Set `ALLOWED_CIDRS` in `.env` before the first deployment; use `allow-ip` when your address changes.
+
+To allow specific addresses instead, pass them, comma-separated; a bare address means `/32`:
+
+```powershell
+./demo/scripts/demo.ps1 allow-ip 203.0.113.7,198.51.100.0/28
+```
+
+```bash
+./demo/scripts/demo.sh allow-ip 203.0.113.7,198.51.100.0/28
+```
+
+**If you use a VPN or a secure access client.** It can route traffic for Azure addresses through a different egress address than the one IP-echo websites see, so the detected address is wrong. ACA then answers `403` with `RBAC: access denied`, and the AKS gateway times out. To find the address Azure sees, check the client IP that Azure Resource Manager recorded for your own recent changes:
+
+```powershell
+az monitor activity-log list --offset 1h --caller (az account show --query user.name -o tsv) --query "[?httpRequest.clientIpAddress!=null].httpRequest.clientIpAddress" -o tsv
+```
+
+Pass those addresses to `allow-ip`, or ask your network administrator which egress addresses your client uses. A shared egress address also admits everyone else who uses it.
 
 ## Additional operator commands
 
@@ -176,3 +195,9 @@ Dry run lists every resource in the resource group, shows whether it carries `pr
 - **kubectl prompts for device-code login or hangs:** run any kubectl-based demo command again; it calls `kubelogin convert-kubeconfig -l azurecli` after `az aks get-credentials`.
 - **ACA revision suffix conflict:** run `rollout-v2` again; it generates a unique `v2-<MMddHHmm>` suffix per run.
 - **AKS ingest job pod template is immutable:** use `ingest-aks` or `aks-deploy`; they delete `job/ingest` before applying `demo/k8s/ingest-job.yaml`.
+- **AKS cluster fails with `CreateDeploymentSafeguardsFailed`:** the subscription hasn't registered `Microsoft.PolicyInsights` (see [Prerequisites](#prerequisites)). Register it and run `aks-deploy` again; the redeployment repairs the cluster in place.
+- **`403` with `RBAC: access denied` from ACA, or a timeout from the AKS gateway:** the platform saw a source address outside `ALLOWED_CIDRS`. See [Restrict access to your IP](#restrict-access-to-your-ip), including the note on VPNs and secure access clients.
+- **Pods crash at startup with `web_port ... unable to parse string as an integer, input_value='tcp://...'`:** Kubernetes injected Service variables such as `WEB_PORT=tcp://<ip>:8080`. The manifests set `enableServiceLinks: false` on every pod to prevent this; keep it if you add Services or pods.
+- **AKS warnings when applying manifests:** deployment safeguards (in warning mode on AKS Automatic) add anti-affinity and topology spread to the Deployments, and note that the ingest Job has no probes. A batch Job doesn't serve traffic, so it has no readiness or liveness probe. Right after a deployment, the autoscalers report `FailedGetResourceMetric` until the first CPU metrics arrive.
+- **ACA job logs aren't in Log Analytics yet:** the environment sends logs through Azure Monitor diagnostic settings, keylessly, to the `ContainerAppConsoleLogs` and `ContainerAppSystemLogs` tables, which lag a few minutes. `az containerapp job logs show` streams them live.
+- **A Foundry deployment fails with `RequestConflict`:** a Foundry resource accepts one change at a time. `foundation.bicep` creates the project first and then the model deployments one by one; rerun `azure-foundation` if a change made elsewhere at the same time collided with it.

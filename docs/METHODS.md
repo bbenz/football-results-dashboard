@@ -235,6 +235,22 @@ The evaluation suite (`demo/src/football_insights/evaluation/`) asks the agent t
 
 Among eligible deployments, the cheaper per answer serves the app, unless another is at least 5 percentage points more accurate at tool selection. The rule is fixed before the suite runs.
 
-**Running it.** With a Foundry project configured (see [SETUP.md](SETUP.md)), run `demo eval` to test in-process with your own sign-in; `--deployments` picks the deployments to compare. `demo eval --target url --url <web URL> --deployments <serving deployment>` tests a deployed endpoint. The public API always answers with the deployment the endpoint is configured to serve, so to evaluate the other deployment there, run `demo switch-model` first; the suite stops if the answers come from a different deployment than requested. Use `--repeats` and `--category` to narrow a run. Reports go to `EVIDENCE_DIR/eval/` and contain metrics only, never answers.
+**Running it.** With a Foundry project configured (see [SETUP.md](SETUP.md)), run `demo eval` to test in-process with your own sign-in; `--deployments` picks the deployments to compare. `demo eval --target url --url <web URL> --deployments <serving deployment>` tests a deployed endpoint. The public API always answers with the deployment the endpoint is configured to serve, so to evaluate the other deployment there, run `demo switch-model` first; the suite stops if the answers come from a different deployment than requested. A deployed endpoint accepts 6 questions per caller per minute (`ASK_RATE_LIMIT_PER_MINUTE`). The suite waits out that limit between answers and doesn't count the wait as latency, so a 34-question run takes about six minutes. Use `--repeats` and `--category` to narrow a run. Reports go to `EVIDENCE_DIR/eval/` and contain metrics only, never answers.
 
-**Results.** The comparison of GPT-6 Astra and GPT-6 Sol, as metrics from repeated runs, is added here after the suite has run against both deployments.
+**Results.** Run on 2026-09-30 in-process (`demo eval --repeats 3`) against GPT-6 Sol (`gpt-6-sol`, version 2026-09-22), with curated data version `cv-0b0558b0bda0`. There were 34 cases, each run 3 times, for 102 answers:
+
+| Metric | gpt-6-sol |
+| --- | --- |
+| Grounding pass rate | 100% (102 of 102) |
+| Tool selection accuracy | 100% |
+| Limitation accuracy | 100% (15 of 15) |
+| Framing pass rate | 100% |
+| Live rate | 100% |
+| Fact accuracy | 100% (6 checks) |
+| Top-entity accuracy | 100% (21 checks) |
+| Answers blocked by content filtering | 0 |
+| Latency p50 / p95 | 4.33 s / 7.45 s |
+| Mean tokens in / out | 5,322 / 159 |
+| Estimated cost per answer | $0.0034 ($0.34 for the whole run) |
+
+GPT-6 Sol meets every gate, so it serves the app. The first deployment was Sol only, so GPT-6 Astra wasn't compared. To compare them, add `gpt-6-astra` to `AI_ALLOWED_DEPLOYMENTS`, rerun `demo azure-foundation`, then run `demo eval --deployments gpt-6-astra,gpt-6-sol`. The same fixed rule then picks the serving deployment.

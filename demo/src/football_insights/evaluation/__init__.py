@@ -214,6 +214,18 @@ def decide(metrics: dict[str, dict[str, Any]]) -> dict[str, Any]:
                      f"another is at least {ACCURACY_MARGIN:.0%} more accurate at tool selection")}
 
 
+class RetryLater(Exception):
+    """Raised by an ask function when the endpoint asks the client to wait, for example a rate limit. run() waits
+    outside the timed part of the answer and asks again, so throttling lengthens the run but not the latency."""
+
+    def __init__(self, seconds: float) -> None:
+        super().__init__(f"retry in {seconds:g} s")
+        self.seconds = seconds
+
+
+MAX_ATTEMPTS = 5
+
+
 def run(cases: list[Case], ask: Callable[[str, str], Answer], deployments: list[str], repeats: int,
         run_tool: Callable[[str, dict[str, Any]], Any] | None = None,
         on_result: Callable[[CaseResult], None] | None = None) -> list[CaseResult]:
@@ -222,8 +234,15 @@ def run(cases: list[Case], ask: Callable[[str, str], Answer], deployments: list[
     for repeat in range(1, repeats + 1):
         for deployment in deployments:
             for case in cases:
-                start = time.perf_counter()
-                answer = ask(case.question, deployment)
+                for attempt in range(1, MAX_ATTEMPTS + 1):
+                    start = time.perf_counter()
+                    try:
+                        answer = ask(case.question, deployment)
+                        break
+                    except RetryLater as wait:
+                        if attempt == MAX_ATTEMPTS:
+                            raise RuntimeError(f"{case.id}: still told to wait after {attempt} attempts") from wait
+                        time.sleep(wait.seconds)
                 result = score(case, answer, deployment, repeat, time.perf_counter() - start, expected[case.id])
                 results.append(result)
                 if on_result:

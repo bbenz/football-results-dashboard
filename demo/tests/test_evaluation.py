@@ -84,3 +84,29 @@ def test_run_computes_expectations_with_the_deterministic_tools() -> None:
     assert summary["deployments"]["sol"]["answers"] == 2
     assert summary["deployments"]["sol"]["top_entity_accuracy"] == 1.0
     assert "Decision rule" in evaluation.render(summary)
+
+
+def test_run_waits_for_rate_limits_outside_the_measured_latency() -> None:
+    case = evaluation.Case(id="t", category="q1", question="Who peaked highest?",
+                           expect_tools=({"tool": "best_team", "args": {"lens": "peak"}},))
+    calls = []
+
+    def ask(question: str, deployment: str) -> Answer:
+        calls.append(question)
+        if len(calls) == 1:
+            raise evaluation.RetryLater(0.3)
+        return answer(question, [("best_team", {"lens": "peak"})])
+
+    [result] = evaluation.run([case], ask, ["sol"], repeats=1)
+    assert len(calls) == 2
+    assert result.wall_seconds < 0.3, "the wait for the rate limit was counted as answer latency"
+
+    def always_limited(question: str, deployment: str) -> Answer:
+        raise evaluation.RetryLater(0)
+
+    try:
+        evaluation.run([case], always_limited, ["sol"], repeats=1)
+    except RuntimeError as exc:
+        assert "still told to wait" in str(exc)
+    else:
+        raise AssertionError("a permanently rate-limited endpoint must stop the run")

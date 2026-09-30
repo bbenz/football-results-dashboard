@@ -54,7 +54,7 @@ Details: [docs/SETUP.md](docs/SETUP.md).
 The same images deploy to Azure Kubernetes Service and to Azure Container Apps with Bicep and the Azure CLI. Everything authenticates with Microsoft Entra ID; there are no keys. Fill in your names in `.env`, then run the steps in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md):
 
 ```powershell
-./demo/scripts/demo.ps1 azure-foundation   # Foundry with both model deployments, monitoring, a budget
+./demo/scripts/demo.ps1 azure-foundation   # Foundry with the model deployments, monitoring, a budget
 ./demo/scripts/demo.ps1 azure-platform     # registry, private storage, per-service identities
 ./demo/scripts/demo.ps1 upload-data
 ./demo/scripts/demo.ps1 build-push

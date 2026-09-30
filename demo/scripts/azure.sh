@@ -171,20 +171,46 @@ def repl(m):
 open(sys.argv[2],"w",encoding="utf-8").write(re.sub(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", repl, s))' "$source" "$dest"
 }
 aks_apply() {
-  local manifest; manifest="$(deploy_dir)/aks-rendered.yaml"
+  local manifest attempt; manifest="$(deploy_dir)/aks-rendered.yaml"
   render_template "$ROOT/demo/k8s/football.yaml" "$manifest"
-  kubectl_checked apply -f "$manifest"
+  # Right after a cluster create or update, the API server's authorization webhook can time out for a few
+  # minutes. apply is idempotent, so retry it.
+  for attempt in 1 2 3 4; do
+    echo "> kubectl apply -f $manifest" >&2
+    kubectl apply -f "$manifest" && return 0
+    [[ $attempt -lt 4 ]] || { echo "kubectl apply failed after $attempt attempts." >&2; exit 1; }
+    echo "kubectl apply failed (attempt $attempt of 4); retrying in 30 seconds." >&2
+    sleep 30
+  done
+}
+wait_aks_ingest_job() {
+  # kubectl wait can't wait for "complete or failed", and a failed Job never completes.
+  local deadline states
+  deadline=$(( $(date +%s) + 1800 ))
+  while (( $(date +%s) < deadline )); do
+    states="$(kubectl -n football get job ingest -o json | "$PYTHON" -c 'import json,sys; d=json.load(sys.stdin); print(" ".join(c["type"] for c in d.get("status",{}).get("conditions",[]) if c.get("status")=="True"))')" || { echo "Could not read the AKS ingest Job status." >&2; exit 1; }
+    [[ " $states " == *" Complete "* ]] && return 0
+    if [[ " $states " == *" Failed "* ]]; then
+      kubectl -n football logs job/ingest --tail=40 >&2 || true
+      echo "The AKS ingest Job failed; its last log lines are above." >&2; exit 1
+    fi
+    sleep 10
+  done
+  echo "The AKS ingest Job did not finish within 30 minutes." >&2; exit 1
 }
 aks_ingest_job() {
   local manifest; manifest="$(deploy_dir)/aks-ingest-rendered.yaml"
   render_template "$ROOT/demo/k8s/ingest-job.yaml" "$manifest"
   kubectl_checked -n football delete job ingest --ignore-not-found=true
   kubectl_checked apply -f "$manifest"
-  kubectl_checked -n football wait --for=condition=complete job/ingest --timeout=30m
+  wait_aks_ingest_job
   kubectl_checked -n football logs job/ingest
 }
 aks_deploy() {
-  set_demo_subscription; import_deployment_outputs; import_digests
+  set_demo_subscription
+  # AKS Automatic's deployment safeguards need this provider; without it the cluster ends up Failed after ~10 minutes.
+  [[ "$(az provider show --namespace Microsoft.PolicyInsights --query registrationState -o tsv)" == Registered ]] || { echo "AKS Automatic needs the Microsoft.PolicyInsights resource provider. Register it once per subscription (free), then rerun: az provider register --namespace Microsoft.PolicyInsights --wait" >&2; exit 1; }
+  import_deployment_outputs; import_digests
   group_deployment football-aks aks.bicep aks.bicepparam
   connect_aks
   aks_apply
@@ -218,7 +244,7 @@ start_aca_ingest_job() {
     (( SECONDS < deadline )) || break
   done
   [[ "$status" == Succeeded ]] || { echo "ACA ingest job ended with status '$status'." >&2; exit 1; }
-  echo "ACA ingest job succeeded; logs are in Log Analytics (ContainerAppConsoleLogs_CL)."
+  echo "ACA ingest job succeeded; logs reach Log Analytics (ContainerAppConsoleLogs) within minutes."
 }
 ingest_aca() { set_demo_subscription; start_aca_ingest_job; }
 aca_deploy() {
@@ -244,10 +270,11 @@ platform_url() {
 }
 test_endpoint() {
   local name="$1" base="${2%/}" path code body_file expected version web_digest_short
+  local hint='A 403 or a timeout usually means the platform saw a source address outside ALLOWED_CIDRS; a VPN or secure access client can route Azure traffic through another address. See "Restrict access to your IP" in docs/DEPLOYMENT.md.'
   body_file="$(deploy_dir)/smoke-${name}.html"
   for path in /healthz /readyz /data; do
-    code="$(curl -sS -o "$body_file" -w '%{http_code}' "${base}${path}")"
-    [[ "$code" == 200 ]] || { echo "$name $path returned $code" >&2; exit 1; }
+    code="$(curl -sS --max-time 20 -o "$body_file" -w '%{http_code}' "${base}${path}" || true)"
+    [[ "$code" == 200 ]] || { echo "$name $path returned ${code:-no response}" >&2; [[ "$code" == 403 || "$code" == 000 || -z "$code" ]] && echo "$hint" >&2; exit 1; }
   done
   curl -sS -o "$body_file" "$base/"
   web_digest_short="${WEB_IMAGE_DIGEST#sha256:}"; web_digest_short="${web_digest_short:0:12}"
@@ -282,9 +309,10 @@ test_insights_isolation() {
   echo "AKS insights isolation: PASS (ClusterIP; no unexpected LoadBalancer services)."
   fqdn="$(az containerapp show --resource-group "$(required_env AZURE_RESOURCE_GROUP)" --name "$(required_env ACA_INSIGHTS_APP_NAME)" --query properties.configuration.ingress.fqdn -o tsv)" || { echo "Could not read ACA insights ingress FQDN." >&2; exit 1; }
   [[ "$fqdn" == *.internal.* ]] || { echo "ACA insights FQDN is not internal: $fqdn" >&2; exit 1; }
+  # The internal name resolves to the environment's public address, and ACA answers outside callers with 404.
   code="$(curl -k -sS -o /dev/null -m 10 -w '%{http_code}' "https://${fqdn}/healthz" 2>/dev/null || true)"
-  [[ "$code" != 200 ]] || { echo "ACA insights /healthz was reachable from this machine; expected failure." >&2; exit 1; }
-  echo "ACA insights isolation: PASS (internal FQDN not reachable from this machine)."
+  [[ "$code" != 200 ]] || { echo "ACA insights /healthz was reachable from this machine; expected 404 or no connection." >&2; exit 1; }
+  echo "ACA insights isolation: PASS (internal ingress; this machine got HTTP ${code:-000}, 000 meaning no connection)."
 }
 smoke() {
   set_demo_subscription; connect_aks; import_digests
@@ -384,22 +412,40 @@ switch_model() {
 }
 allow_ip() {
   set_demo_subscription
-  local ip cidr rg app cluster rules patch
-  ip="$(curl -sS https://api.ipify.org)"; cidr="${ip}/32"
-  update_env_value ALLOWED_CIDRS "$cidr"
+  local cidr cidrs=() joined rg app cluster rules patch names=() i
+  # Explicit addresses win: a VPN or secure access client can route Azure traffic through an address that
+  # IP-echo sites never see. Without arguments, allow the address api.ipify.org reports.
+  if [[ $# -gt 0 ]]; then
+    IFS=',' read -ra cidrs <<< "$(IFS=','; echo "$*")"
+  else
+    cidrs=("$(curl -sS --max-time 10 https://api.ipify.org)")
+  fi
+  local cleaned=()
+  for cidr in "${cidrs[@]}"; do
+    cidr="${cidr// /}"; [[ -z "$cidr" ]] && continue; [[ "$cidr" == */* ]] || cidr="${cidr}/32"
+    [[ "$cidr" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$ ]] || { echo "Not an IPv4 address or CIDR: $cidr" >&2; exit 1; }
+    cleaned+=("$cidr")
+  done
+  [[ ${#cleaned[@]} -gt 0 ]] || { echo "No address to allow." >&2; exit 1; }
+  joined="$(IFS=','; echo "${cleaned[*]}")"
+  update_env_value ALLOWED_CIDRS "$joined"
   rg="$(required_env AZURE_RESOURCE_GROUP)"; app="$(required_env ACA_WEB_APP_NAME)"; cluster="$(required_env AKS_CLUSTER_NAME)"
   # Update whichever platforms are deployed; a team may deploy only one.
   if [[ -n "$(az containerapp show --resource-group "$rg" --name "$app" --query name -o tsv 2>/dev/null || true)" ]]; then
+    # Add the new rules before removing old ones: an app with no rules at all accepts every address.
+    for i in "${!cleaned[@]}"; do
+      names+=("allow-$i")
+      az_checked containerapp ingress access-restriction set --resource-group "$rg" --name "$app" --rule-name "allow-$i" --ip-address "${cleaned[$i]}" --action Allow --output none
+    done
     rules="$(az containerapp ingress access-restriction list --resource-group "$rg" --name "$app" -o json 2>/dev/null || echo '[]')"
-    "$PYTHON" -c 'import json,sys; [print(r.get("name","")) for r in json.loads(sys.argv[1]) if r.get("name") != "allow-0"]' "$rules" | while IFS= read -r rule; do [[ -n "$rule" ]] && az_checked containerapp ingress access-restriction remove --resource-group "$rg" --name "$app" --rule-name "$rule" --output none; done
-    az_checked containerapp ingress access-restriction set --resource-group "$rg" --name "$app" --rule-name allow-0 --ip-address "$cidr" --action Allow --output none
-    echo "ACA web now accepts only $cidr."
+    "$PYTHON" -c 'import json,sys; keep=set(sys.argv[2].split(",")); [print(r.get("name","")) for r in json.loads(sys.argv[1]) if r.get("name") not in keep]' "$rules" "$(IFS=','; echo "${names[*]}")" | while IFS= read -r rule; do [[ -n "$rule" ]] && az_checked containerapp ingress access-restriction remove --resource-group "$rg" --name "$app" --rule-name "$rule" --output none; done
+    echo "ACA web now accepts only $joined."
   else echo "ACA web app $app not found; skipped."; fi
   if [[ -n "$(az aks show --resource-group "$rg" --name "$cluster" --query name -o tsv 2>/dev/null || true)" ]]; then
     connect_aks
-    patch="$("$PYTHON" -c 'import json,sys; print(json.dumps({"spec":{"infrastructure":{"annotations":{"service.beta.kubernetes.io/azure-allowed-ip-ranges":sys.argv[1]}}}}))' "$cidr")"
+    patch="$("$PYTHON" -c 'import json,sys; print(json.dumps({"spec":{"infrastructure":{"annotations":{"service.beta.kubernetes.io/azure-allowed-ip-ranges":sys.argv[1]}}}}))' "$joined")"
     kubectl_checked -n football patch gateway football-web --type merge -p "$patch"
-    echo "AKS web now accepts only $cidr."
+    echo "AKS web now accepts only $joined."
   else echo "AKS cluster $cluster not found; skipped."; fi
 }
 trace_cmd() {

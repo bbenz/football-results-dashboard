@@ -137,25 +137,24 @@ def _local_agent() -> tuple[Any, Any]:
 def _url_asker(url: str) -> Any:
     import httpx
 
+    from .evaluation import RetryLater
     from .schemas import Answer
 
     endpoint = url.rstrip("/") + "/api/ask"
 
     def ask(question: str, deployment: str) -> Answer:
+        response = httpx.post(endpoint, json={"question": question}, timeout=120)
+        if response.status_code == 429:
+            # The endpoint limits questions per caller per minute; the suite waits for the next minute untimed.
+            raise RetryLater(61)
+        response.raise_for_status()
+        answer = Answer.model_validate(response.json())
         # The public API always uses the endpoint's configured deployment; this checks it is the one requested.
-        for _ in range(4):
-            response = httpx.post(endpoint, json={"question": question}, timeout=120)
-            if response.status_code == 429:
-                time.sleep(61)
-                continue
-            response.raise_for_status()
-            answer = Answer.model_validate(response.json())
-            if answer.model and answer.model.deployment != deployment:
-                raise SystemExit(f"{url} serves {answer.model.deployment}, not {deployment}. Run "
-                                 f"`demo switch-model {deployment}` first, or pass --deployments "
-                                 f"{answer.model.deployment}.")
-            return answer
-        raise SystemExit(f"rate limited repeatedly by {endpoint}")
+        if answer.model and answer.model.deployment != deployment:
+            raise SystemExit(f"{url} serves {answer.model.deployment}, not {deployment}. Run "
+                             f"`demo switch-model {deployment}` first, or pass --deployments "
+                             f"{answer.model.deployment}.")
+        return answer
 
     return ask
 

@@ -48,17 +48,29 @@ resource environment 'Microsoft.App/managedEnvironments@2026-01-01' = {
   location: location
   tags: tags
   properties: {
+    // Keyless: the log-analytics destination needs the workspace's shared key, so logs go through Azure Monitor
+    // and the diagnostic setting below: https://learn.microsoft.com/en-us/azure/container-apps/log-options
     appLogsConfiguration: {
-      destination: 'log-analytics'
-      logAnalyticsConfiguration: {
-        customerId: workspace.properties.customerId
-      }
+      destination: 'azure-monitor'
     }
     workloadProfiles: [
       {
         name: 'Consumption'
         workloadProfileType: 'Consumption'
       }
+    ]
+  }
+}
+
+resource environmentLogs 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'logs-to-workspace'
+  scope: environment
+  properties: {
+    workspaceId: workspace.id
+    logAnalyticsDestinationType: 'Dedicated'
+    logs: [
+      { category: 'ContainerAppConsoleLogs', enabled: true }
+      { category: 'ContainerAppSystemLogs', enabled: true }
     ]
   }
 }

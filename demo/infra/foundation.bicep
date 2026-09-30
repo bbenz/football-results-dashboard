@@ -36,11 +36,17 @@ param budgetContactEmail string
 @description('Budget start date in yyyy-MM-01 format.')
 param budgetStartDate string
 
-@description('gpt-6-astra deployment capacity.')
-param gpt6AstraCapacity int = 100
+@description('Model deployments to create, by name; each must be in the catalog below. The app may use only these.')
+param modelDeployments array = [ 'gpt-6-astra', 'gpt-6-sol' ]
 
-@description('gpt-6-sol deployment capacity.')
-param gpt6SolCapacity int = 100
+@description('Capacity of each model deployment, in thousands of tokens per minute.')
+param modelCapacity int = 100
+
+// Pinned model versions. Automatic version upgrades are off, so a new version can't arrive during the event.
+var modelCatalog = {
+  'gpt-6-astra': { name: 'gpt-6-astra', version: '2026-09-03' }
+  'gpt-6-sol': { name: 'gpt-6-sol', version: '2026-09-22' }
+}
 
 var tags = {
   project: projectTag
@@ -82,42 +88,28 @@ resource foundryProject 'Microsoft.CognitiveServices/accounts/projects@2026-07-0
   properties: {}
 }
 
-resource astraDeployment 'Microsoft.CognitiveServices/accounts/deployments@2026-07-01' = {
+// Deployments on one Foundry resource are created one at a time, after the project: the resource accepts only one
+// change at a time, and a project created in parallel fails with RequestConflict.
+@batchSize(1)
+resource modelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2026-07-01' = [for name in modelDeployments: {
   parent: foundry
-  name: 'gpt-6-astra'
+  name: name
   sku: {
     name: 'GlobalStandard'
-    capacity: gpt6AstraCapacity
+    capacity: modelCapacity
   }
   properties: {
     model: {
       format: 'OpenAI'
-      name: 'gpt-6-astra'
-      version: '2026-09-03'
-    }
-    versionUpgradeOption: 'NoAutoUpgrade'
-  }
-}
-
-resource solDeployment 'Microsoft.CognitiveServices/accounts/deployments@2026-07-01' = {
-  parent: foundry
-  name: 'gpt-6-sol'
-  sku: {
-    name: 'GlobalStandard'
-    capacity: gpt6SolCapacity
-  }
-  properties: {
-    model: {
-      format: 'OpenAI'
-      name: 'gpt-6-sol'
-      version: '2026-09-22'
+      name: modelCatalog[name].name
+      version: modelCatalog[name].version
     }
     versionUpgradeOption: 'NoAutoUpgrade'
   }
   dependsOn: [
-    astraDeployment
+    foundryProject
   ]
-}
+}]
 
 resource workspace 'Microsoft.OperationalInsights/workspaces@2025-02-01' = {
   name: logAnalyticsName

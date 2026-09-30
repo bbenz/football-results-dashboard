@@ -129,9 +129,9 @@ Then:
 
 > Every answer has a trace ID. Here's one end to end: the web request, the call to `insights`, the agent, each model call with its tokens, and each tool call with its evidence IDs. Application Insights shows the same trace, a few minutes behind; this view is immediate.
 >
-> Each answer shows its tokens and estimated cost, on both platforms. We deployed two models, GPT-6 Astra and GPT-6 Sol. The evaluation suite asked both the same questions, repeatedly, and a rule written in advance picked the one serving today: grounding, tool choice, latency, and cost. Switching is one setting, no rebuild.
+> Each answer shows its tokens and estimated cost, on both platforms. The evaluation suite asks the serving model the same questions, repeatedly, and a rule written in advance decides whether it may serve: grounding, tool choice, honest limits, latency, and cost. Today that's GPT-6 Sol. With GPT-6 Astra deployed too, the same rule picks between them. Switching is one setting, no rebuild.
 >
-> Foundry's content filters are on for both models. If a response is filtered, the page says so, and the evidence still renders.
+> Foundry's content filters are on for every deployment. If a response is filtered, the page says so, and the evidence still renders.
 
 ## 8. Hackathon launchpad (51:00–53:00)
 

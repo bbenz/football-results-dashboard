@@ -28,7 +28,7 @@
   Azure commands (not run by local setup)
     azure-foundation, azure-platform, upload-data, build-push, aks-deploy, aca-deploy,
     ingest-aks, ingest-aca, smoke, parity, snapshot [aks|aca|both|local], load-test [aks|aca|both], rollout-v2,
-    rollback [aks|aca|both], trace <id>, preflight, reset, allow-ip, switch-model <deployment>, teardown -DryRun
+    rollback [aks|aca|both], trace <id>, preflight, reset, allow-ip [cidr,...], switch-model <deployment>, teardown -DryRun
 
   Settings come from environment variables and the repository's .env (see .env.example).
 #>
@@ -142,7 +142,7 @@ switch ($Command) {
     'trace' { Invoke-Trace -TraceId $(if ($Rest.Count) { $Rest[0] } else { '' }) }
     'preflight' { Invoke-Preflight }
     'reset' { Invoke-Reset }
-    'allow-ip' { Invoke-AllowIp }
+    'allow-ip' { Invoke-AllowIp -Cidrs $Rest }
     'switch-model' { Invoke-SwitchModel -Deployment $(if ($Rest.Count) { $Rest[0] } else { '' }) }
     'teardown' { Invoke-Teardown -DryRun:$DryRun }
     default { Get-Help $PSCommandPath -Detailed | Out-String | Write-Host }

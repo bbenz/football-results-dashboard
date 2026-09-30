@@ -10,12 +10,13 @@ from __future__ import annotations
 
 import os
 import shutil
+from collections.abc import Iterator
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from football_insights.config import Settings
+from football_insights.config import Settings, get_settings
 from football_insights.data.contract import FILES, FileSpec
 from football_insights.reference import REFERENCE_DIR, Reference, load
 
@@ -60,6 +61,19 @@ def synthetic_reference(root: Path) -> Reference:
 
 def make_settings(**overrides: object) -> Settings:
     return Settings(_env_file=None, **overrides)  # type: ignore[call-arg]
+
+
+@pytest.fixture(autouse=True)
+def operator_settings_removed(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Unit tests see the app's defaults, never the operator's configuration: `demo test` exports .env into the
+    process, and a configured Foundry endpoint or model deployment changes what the tests expect. Live tests keep
+    the environment, because that is how they reach the model."""
+    if request.node.get_closest_marker("live") is None:
+        for name in Settings.model_fields:
+            monkeypatch.delenv(name.upper(), raising=False)
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 @pytest.fixture

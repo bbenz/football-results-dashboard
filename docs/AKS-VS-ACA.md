@@ -22,19 +22,21 @@ What differs is what each platform does natively: how it scales (CPU-based autos
 | Topic | AKS (Automatic) | ACA (workload profiles, Consumption) | Source |
 | --- | --- | --- | --- |
 | What you manage | A Kubernetes cluster: Kubernetes objects, the Gateway, autoscalers, network policies, workload identity federation, and the upgrade schedule. AKS Automatic manages nodes, node repair, and upgrades. | An environment, two apps, and a job. No cluster, nodes, or Kubernetes versions. | Counted from `demo/infra` and `demo/k8s`, 2026-09-30 |
-| Deployment definitions | **23 declarations in 501 lines**: 8 Azure resources in Bicep (183 lines, including parameters) plus 15 Kubernetes objects in YAML (318 lines) | **4 Azure resources in 297 lines** of Bicep, including parameters | Counted, 2026-09-30 |
-| Shared by both | 24 resource declarations in 474 lines: Foundry and both model deployments, Log Analytics, Application Insights, budget, registry, storage, six identities, and role assignments | same | Counted, 2026-09-30 |
+| Deployment definitions | **24 declarations in 529 lines**: 8 Azure resources in Bicep (183 lines, including parameters) plus 16 Kubernetes objects in YAML (346 lines) | **5 Azure resources in 309 lines** of Bicep, including parameters | Counted, 2026-09-30 |
+| Shared by both | 23 resource declarations in 467 lines: Foundry and its model deployments (one declaration, repeated for each allowed deployment), Log Analytics, Application Insights, budget, registry, storage, six identities, and role assignments | same | Counted, 2026-09-30 |
 | Identity setup per service | 5 steps, plus 2 cluster-wide | 4 steps | Counted; see [Identity](#identity) |
 | Public ingress | Gateway API `Gateway` + `HTTPRoute` (application routing, class `approuting-istio`) on an Azure load balancer with a public IP | `ingress.external: true` on the app | Templates |
 | TLS | Plain HTTP on the gateway's IP address in this demo. HTTPS needs a DNS name and a certificate, for example from Key Vault through application routing. | HTTPS on a generated `*.azurecontainerapps.io` name, with a managed certificate, by default | [AKS app routing Gateway API](https://learn.microsoft.com/en-us/azure/aks/app-routing-gateway-api) (2026-08-31); [ACA ingress](https://learn.microsoft.com/en-us/azure/container-apps/ingress-overview); checked 2026-09-30 |
 | Restricting who can connect | Gateway `spec.infrastructure.annotations` sets `service.beta.kubernetes.io/azure-allowed-ip-ranges` on the generated load balancer Service; the Azure cloud provider turns it into network security group rules | `ingress.ipSecurityRestrictions` allow rules on the app | [Istio Gateway API annotations](https://learn.microsoft.com/en-us/azure/aks/istio-gateway-api) (2025-08-21); [ACA IP restrictions](https://learn.microsoft.com/en-us/azure/container-apps/ip-restrictions) (2026-03-19) |
+| What a blocked caller sees | The connection times out: the network security group drops the packets | HTTP `403` with `RBAC: access denied` | Tested 2026-09-30 from each platform's outbound address |
+| The caller's address inside the app | Only with `externalTrafficPolicy: Local` on the gateway's Service, set through a ConfigMap that the Gateway references in `spec.infrastructure.parametersRef`. The default, `Cluster`, replaces it with node addresses, so per-caller rate limits would count per node. | The ingress appends it to `X-Forwarded-For` by default | [Istio Gateway API ConfigMap customizations](https://learn.microsoft.com/en-us/azure/aks/istio-gateway-api) (2025-08-21); tested 2026-09-30 |
 | Service-to-service | `ClusterIP` Service; a Cilium network policy admits only `web` pods to `insights` | Internal ingress: reachable only by apps and jobs in the same environment; outside callers get 404 | Templates; [ACA environment networking](https://learn.microsoft.com/en-us/azure/container-apps/networking) |
 | Isolation granularity | Per pod, by label | Per environment | Templates |
 | Autoscaling | Horizontal Pod Autoscaler at 70% CPU; AKS Automatic adds nodes as needed | HTTP scale rule at 20 concurrent requests per replica | Templates |
 | Rollout of v2 | Rolling update (`kubectl set image`); Kubernetes keeps the previous ReplicaSet | New revision at 0% traffic, then a 50/50 split between revisions | Templates and `demo rollout-v2` |
 | Rollback | Another rolling update, back to the v1 digests | Move 100% of traffic back to the previous revision, which is still running | `demo rollback` |
 | Batch job | Kubernetes `Job` (retry once, deleted an hour after it finishes); rerun by deleting and re-applying it, because its pod template is immutable | Container Apps job with a manual trigger (30-minute timeout, retry once); rerun with `az containerapp job start` | Templates |
-| Job logs | `kubectl logs job/ingest` | Log Analytics (`ContainerAppConsoleLogs_CL`) | Scripts |
+| Job logs | `kubectl logs job/ingest` | Log Analytics (`ContainerAppConsoleLogs`), a few minutes behind | Scripts |
 | App telemetry | OpenTelemetry to Application Insights, same code | same | `telemetry.py` |
 | Platform telemetry | Managed Prometheus and Container insights, preconfigured by AKS Automatic | Environment logs to Log Analytics | [AKS Automatic](https://learn.microsoft.com/en-us/azure/aks/intro-aks-automatic) (2026-07-07) |
 | Day-2 upgrades | Cluster auto-upgrade on the stable channel (N-1) and automatic node image upgrades; upgrades stop if deprecated Kubernetes APIs are in use. This demo sets planned maintenance windows that exclude the days around the event. | No platform versions to upgrade; you deploy new revisions of your apps | [AKS Automatic](https://learn.microsoft.com/en-us/azure/aks/intro-aks-automatic) (2026-07-07) |
@@ -45,9 +47,9 @@ Counted from the repository on 2026-09-30. Lines include parameter files.
 
 | | AKS | ACA |
 | --- | --- | --- |
-| Azure resources (Bicep) | 8: the cluster, the kubelet's registry pull role, your Kubernetes RBAC role, three federated identity credentials, two planned-maintenance configurations (`aks.bicep`, 183 lines) | 4: the environment, `web`, `insights`, and the ingest job (`aca.bicep`, 297 lines) |
-| Kubernetes objects (YAML) | 15: a namespace, 3 service accounts, 2 Deployments, 2 Services, a Gateway, an HTTPRoute, 2 autoscalers, 2 network policies (`football.yaml`, 269 lines), and the ingest Job (`ingest-job.yaml`, 49 lines) | none |
-| Total | 23 declarations, 501 lines | 4 declarations, 297 lines |
+| Azure resources (Bicep) | 8: the cluster, the kubelet's registry pull role, your Kubernetes RBAC role, three federated identity credentials, two planned-maintenance configurations (`aks.bicep`, 183 lines) | 5: the environment, its diagnostic setting that sends logs to Log Analytics without a key, `web`, `insights`, and the ingest job (`aca.bicep`, 309 lines) |
+| Kubernetes objects (YAML) | 16: a namespace, 3 service accounts, 2 Deployments, 2 Services, a Gateway and the ConfigMap that keeps callers' addresses, an HTTPRoute, 2 autoscalers, 2 network policies (`football.yaml`, 295 lines), and the ingest Job (`ingest-job.yaml`, 51 lines) | none |
+| Total | 24 declarations, 529 lines | 5 declarations, 309 lines |
 
 Both also use `foundation.bicep` and `platform.bicep`, which neither platform could do without.
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -86,3 +87,37 @@ def test_both_platforms_give_each_service_the_same_settings() -> None:
     # web reaches data and the model only through insights, so it gets neither kind of setting.
     leaked = {n for n in aks["web"] if n.startswith(("CURATED_", "STORAGE_", "FOUNDRY_", "AI_", "RAW_"))}
     assert not leaked, f"web is given settings it never reads: {sorted(leaked)}"
+
+
+def k8s_docs() -> list[dict[str, Any]]:
+    return [doc for path in sorted((DEMO / "k8s").glob("*.yaml"))
+            for doc in yaml.safe_load_all(path.read_text(encoding="utf-8")) if doc]
+
+
+def test_aks_pods_opt_out_of_service_link_variables() -> None:
+    # Unless a pod opts out, Kubernetes gives it <SERVICE>_PORT=tcp://<ip>:<port> and similar variables for every
+    # Service in its namespace. The web and insights Services would override the WEB_PORT and INSIGHTS_PORT
+    # settings, and every service would fail at startup.
+    docs = k8s_docs()
+    services = {doc["metadata"]["name"].upper().replace("-", "_") for doc in docs if doc["kind"] == "Service"}
+    injected = {f"{svc}_{suffix}" for svc in services for suffix in ("PORT", "SERVICE_HOST", "SERVICE_PORT")}
+    collisions = sorted(injected & {name.upper() for name in Settings.model_fields})
+    pods = [doc for doc in docs if doc["kind"] in ("Deployment", "Job")]
+    assert {doc["metadata"]["name"] for doc in pods} == {"web", "insights", "ingest"}
+    for doc in pods:
+        assert doc["spec"]["template"]["spec"].get("enableServiceLinks") is False, \
+            f"{doc['metadata']['name']} must set enableServiceLinks: false, or Services override {collisions}"
+
+
+def test_aks_gateway_keeps_the_callers_address() -> None:
+    # web's rate limits key on the caller's address. With externalTrafficPolicy "Cluster", the gateway would see node
+    # addresses, and a caller spread across nodes would get several allowances.
+    docs = {(doc["kind"], doc["metadata"]["name"]): doc for doc in k8s_docs()}
+    ref = docs[("Gateway", "football-web")]["spec"]["infrastructure"]["parametersRef"]
+    assert (ref["group"], ref["kind"]) == ("", "ConfigMap")
+    service = yaml.safe_load(docs[("ConfigMap", ref["name"])]["data"]["service"])
+    assert service["spec"]["externalTrafficPolicy"] == "Local"
+    # The add-on's port 80 health-probe annotations suit "Cluster" only; the overlay must unset them.
+    probes = ("port", "protocol", "request-path")
+    assert service["metadata"]["annotations"] == {
+        f"service.beta.kubernetes.io/port_80_health-probe_{name}": None for name in probes}

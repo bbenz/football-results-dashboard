@@ -203,18 +203,49 @@ function Convert-TemplateFile([string]$Source, [string]$Destination) {
 function Invoke-AksApply {
     $manifest = Join-Path (Get-DeployDir) 'aks-rendered.yaml'
     Convert-TemplateFile (Join-Path $script:Root 'demo/k8s/football.yaml') $manifest
-    Invoke-KubectlChecked apply -f $manifest
+    # Right after a cluster create or update, the API server's authorization webhook can time out for a few
+    # minutes. apply is idempotent, so retry it.
+    for ($attempt = 1; ; $attempt++) {
+        Write-Host "> kubectl apply -f $manifest"
+        kubectl apply -f $manifest | Out-Host
+        if ($LASTEXITCODE -eq 0) { return }
+        if ($attempt -ge 4) { throw "kubectl apply failed after $attempt attempts." }
+        Write-Host "kubectl apply failed (attempt $attempt of 4); retrying in 30 seconds."
+        Start-Sleep -Seconds 30
+    }
+}
+function Wait-AksIngestJob([int]$TimeoutMinutes = 30) {
+    # kubectl wait can't wait for "complete or failed", and a failed Job never completes.
+    $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
+    while ((Get-Date) -lt $deadline) {
+        $job = kubectl -n football get job ingest -o json | ConvertFrom-Json
+        if ($LASTEXITCODE -ne 0) { throw 'Could not read the AKS ingest Job status.' }
+        # A new Job has no conditions yet; strict mode throws on missing properties, so check first.
+        $status = if ($job.PSObject.Properties['status']) { $job.status } else { $null }
+        $conditions = if ($status -and $status.PSObject.Properties['conditions']) { @($status.conditions) } else { @() }
+        $states = @($conditions | Where-Object { $_.status -eq 'True' } | ForEach-Object { $_.type })
+        if ($states -contains 'Complete') { return }
+        if ($states -contains 'Failed') {
+            kubectl -n football logs job/ingest --tail=40 | Out-Host
+            throw 'The AKS ingest Job failed; its last log lines are above.'
+        }
+        Start-Sleep -Seconds 10
+    }
+    throw "The AKS ingest Job did not finish within $TimeoutMinutes minutes."
 }
 function Invoke-AksIngestJob {
     $manifest = Join-Path (Get-DeployDir) 'aks-ingest-rendered.yaml'
     Convert-TemplateFile (Join-Path $script:Root 'demo/k8s/ingest-job.yaml') $manifest
     Invoke-KubectlChecked -n football delete job ingest --ignore-not-found=true
     Invoke-KubectlChecked apply -f $manifest
-    Invoke-KubectlChecked -n football wait --for=condition=complete job/ingest --timeout=30m
+    Wait-AksIngestJob
     Invoke-KubectlChecked -n football logs job/ingest
 }
 function Invoke-AksDeploy {
     Set-DemoSubscription
+    # AKS Automatic's deployment safeguards need this provider; without it the cluster ends up Failed after ~10 minutes.
+    $policyInsights = az provider show --namespace Microsoft.PolicyInsights --query registrationState -o tsv
+    if ($policyInsights -ne 'Registered') { throw 'AKS Automatic needs the Microsoft.PolicyInsights resource provider. Register it once per subscription (free), then rerun: az provider register --namespace Microsoft.PolicyInsights --wait' }
     Import-DeploymentOutputs
     [void](Import-Digests)
     Invoke-GroupDeployment 'football-aks' 'aks.bicep' 'aks.bicepparam'
@@ -254,7 +285,7 @@ function Start-AcaIngestJob {
         Write-Host "  status: $status"
     } while ($status -in @('Running', 'Processing', '') -and (Get-Date) -lt $deadline)
     if ($status -ne 'Succeeded') { throw "ACA ingest job ended with status '$status'." }
-    Write-Host 'ACA ingest job succeeded; logs are in Log Analytics (ContainerAppConsoleLogs_CL).'
+    Write-Host 'ACA ingest job succeeded; logs reach Log Analytics (ContainerAppConsoleLogs) within minutes.'
 }
 function Invoke-IngestAca {
     Set-DemoSubscription
@@ -287,9 +318,12 @@ function Get-PlatformUrl([string]$Platform) {
     if ($Platform -eq 'aca') { return Get-AcaWebUrl }
     throw "Unknown platform $Platform"
 }
+$script:AllowListHint = 'A 403 or a timeout usually means the platform saw a source address outside ALLOWED_CIDRS; a VPN or secure access client can route Azure traffic through another address. See "Restrict access to your IP" in docs/DEPLOYMENT.md.'
 function Test-Endpoint([string]$Name, [string]$BaseUrl, $Digests) {
     foreach ($path in '/healthz', '/readyz', '/data') {
-        $response = Invoke-WebRequest -Uri ($BaseUrl.TrimEnd('/') + $path) -TimeoutSec 20 -SkipHttpErrorCheck
+        try { $response = Invoke-WebRequest -Uri ($BaseUrl.TrimEnd('/') + $path) -TimeoutSec 20 -SkipHttpErrorCheck }
+        catch { throw "$Name $path failed: $($_.Exception.Message) $script:AllowListHint" }
+        if ($response.StatusCode -eq 403) { throw "$Name $path returned 403. $script:AllowListHint" }
         if ($response.StatusCode -ne 200) { throw "$Name $path returned $($response.StatusCode)" }
     }
     $page = (Invoke-WebRequest -Uri $BaseUrl -TimeoutSec 30).Content
@@ -329,13 +363,10 @@ function Test-InsightsIsolation {
     $fqdn = az containerapp show --resource-group (Get-RequiredEnv 'AZURE_RESOURCE_GROUP') --name (Get-RequiredEnv 'ACA_INSIGHTS_APP_NAME') --query properties.configuration.ingress.fqdn -o tsv
     if ($LASTEXITCODE -ne 0) { throw 'Could not read ACA insights ingress FQDN.' }
     if ($fqdn -notmatch '\.internal\.') { throw "ACA insights FQDN is not internal: $fqdn" }
-    try {
-        Invoke-WebRequest -Uri "https://$fqdn/healthz" -TimeoutSec 10 -SkipHttpErrorCheck | Out-Null
-        throw 'ACA insights /healthz was reachable from this machine; expected DNS or connection failure.'
-    } catch {
-        if ($_.Exception.Message -like 'ACA insights /healthz was reachable*') { throw }
-        Write-Host 'ACA insights isolation: PASS (internal FQDN not reachable from this machine).'
-    }
+    # The internal name resolves to the environment's public address, and ACA answers outside callers with 404.
+    try { $code = [int](Invoke-WebRequest -Uri "https://$fqdn/healthz" -TimeoutSec 10 -SkipHttpErrorCheck).StatusCode } catch { $code = 0 }
+    if ($code -eq 200) { throw 'ACA insights /healthz was reachable from this machine; expected 404 or no connection.' }
+    Write-Host "ACA insights isolation: PASS (internal ingress; this machine got $(if ($code) { "HTTP $code" } else { 'no connection' }))."
 }
 function Invoke-Smoke {
     Set-DemoSubscription
@@ -451,28 +482,37 @@ function Invoke-SwitchModel([string]$Deployment) {
     Invoke-KubectlChecked -n football rollout status deployment/insights --timeout=5m
     Write-Host "Both platforms now serve answers with $Deployment (configuration only; no rebuild)."
 }
-function Invoke-AllowIp {
+function Invoke-AllowIp([string[]]$Cidrs) {
     Set-DemoSubscription
-    $ip = (Invoke-RestMethod -Uri 'https://api.ipify.org' -TimeoutSec 10).Trim()
-    $cidr = "$ip/32"
-    Update-DotEnvValue 'ALLOWED_CIDRS' $cidr
+    # Explicit addresses win: a VPN or secure access client can route Azure traffic through an address that
+    # IP-echo sites never see. Without arguments, allow the address api.ipify.org reports.
+    $list = @($Cidrs | ForEach-Object { "$_" -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ } | ForEach-Object { if ($_ -notmatch '/') { "$_/32" } else { $_ } })
+    if (-not $list.Count) { $list = @("$((Invoke-RestMethod -Uri 'https://api.ipify.org' -TimeoutSec 10).Trim())/32") }
+    foreach ($cidr in $list) { if ($cidr -notmatch '^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$') { throw "Not an IPv4 address or CIDR: $cidr" } }
+    $joined = $list -join ','
+    Update-DotEnvValue 'ALLOWED_CIDRS' $joined
     $rg = Get-RequiredEnv 'AZURE_RESOURCE_GROUP'
     $app = Get-RequiredEnv 'ACA_WEB_APP_NAME'
     $cluster = Get-RequiredEnv 'AKS_CLUSTER_NAME'
     # Update whichever platforms are deployed; a team may deploy only one.
     if (az containerapp show --resource-group $rg --name $app --query name -o tsv 2>$null) {
+        # Add the new rules before removing old ones: an app with no rules at all accepts every address.
+        $names = @()
+        for ($i = 0; $i -lt $list.Count; $i++) {
+            $names += "allow-$i"
+            Invoke-AzChecked containerapp ingress access-restriction set --resource-group $rg --name $app --rule-name "allow-$i" --ip-address $list[$i] --action Allow --output none
+        }
         $rules = az containerapp ingress access-restriction list --resource-group $rg --name $app -o json | ConvertFrom-Json
         if ($LASTEXITCODE -eq 0) {
-            foreach ($rule in @($rules)) { if ($rule.name -ne 'allow-0') { Invoke-AzChecked containerapp ingress access-restriction remove --resource-group $rg --name $app --rule-name $rule.name --output none } }
+            foreach ($rule in @($rules)) { if ($rule.name -notin $names) { Invoke-AzChecked containerapp ingress access-restriction remove --resource-group $rg --name $app --rule-name $rule.name --output none } }
         }
-        Invoke-AzChecked containerapp ingress access-restriction set --resource-group $rg --name $app --rule-name allow-0 --ip-address $cidr --action Allow --output none
-        Write-Host "ACA web now accepts only $cidr."
+        Write-Host "ACA web now accepts only $joined."
     } else { Write-Host "ACA web app $app not found; skipped." }
     if (az aks show --resource-group $rg --name $cluster --query name -o tsv 2>$null) {
         Connect-Aks
-        $patch = @{ spec = @{ infrastructure = @{ annotations = @{ 'service.beta.kubernetes.io/azure-allowed-ip-ranges' = $cidr } } } } | ConvertTo-Json -Depth 6 -Compress
+        $patch = @{ spec = @{ infrastructure = @{ annotations = @{ 'service.beta.kubernetes.io/azure-allowed-ip-ranges' = $joined } } } } | ConvertTo-Json -Depth 6 -Compress
         Invoke-KubectlChecked -n football patch gateway football-web --type merge -p $patch
-        Write-Host "AKS web now accepts only $cidr."
+        Write-Host "AKS web now accepts only $joined."
     } else { Write-Host "AKS cluster $cluster not found; skipped." }
 }
 function Invoke-Trace([string]$TraceId) {

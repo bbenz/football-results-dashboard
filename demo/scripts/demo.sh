@@ -24,7 +24,7 @@
 # Azure commands (not run by local setup)
 #   azure-foundation, azure-platform, upload-data, build-push, aks-deploy, aca-deploy,
 #   ingest-aks, ingest-aca, smoke, parity, snapshot [aks|aca|both|local], load-test [aks|aca|both], rollout-v2,
-#   rollback [aks|aca|both], trace <id>, preflight, reset, allow-ip, switch-model <deployment>, teardown --dry-run
+#   rollback [aks|aca|both], trace <id>, preflight, reset, allow-ip [cidr,...], switch-model <deployment>, teardown --dry-run
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/azure.sh"
@@ -138,7 +138,7 @@ HOOK
   trace) trace_cmd "${1:-}" ;;
   preflight) preflight ;;
   reset) reset_demo ;;
-  allow-ip) allow_ip ;;
+  allow-ip) allow_ip "$@" ;;
   switch-model) switch_model "${1:-}" ;;
   teardown) teardown "${1:-}" ;;
   *) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print } /^set -euo/ { exit }' "${BASH_SOURCE[0]}" ;;
