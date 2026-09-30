@@ -1,4 +1,4 @@
-# Live-model overlay for Docker Compose, used by `fi up -LiveModel`.
+# Live-model overlay for Docker Compose, used by `demo up -LiveModel` (bash: `demo up --live-model`).
 # Containers cannot reuse the host's Azure CLI sign-in, so insights reads a short-lived
 # token file that the host script writes and refreshes. No keys exist anywhere.
 services:

@@ -18,7 +18,8 @@
 #
 # Azure commands (not run by local setup)
 #   azure-foundation, azure-platform, upload-data, build-push, aks-deploy, aca-deploy,
-#   ingest-aks, ingest-aca, smoke, allow-ip, switch-model <deployment>, teardown --dry-run
+#   ingest-aks, ingest-aca, smoke, parity, load-test [aks|aca|both], rollout-v2,
+#   rollback, trace <id>, preflight, reset, allow-ip, switch-model <deployment>, teardown --dry-run
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/azure.sh"
@@ -37,18 +38,39 @@ case "$command" in
   verify) run_cli verify-data "$@" ;;
   ingest) run_cli ingest "$@" ;;
   up)
-    compose build
-    WEB_IMAGE_DIGEST="$(docker image inspect football-insights-web:local --format '{{.Id}}')"
-    INSIGHTS_IMAGE_DIGEST="$(docker image inspect football-insights-insights:local --format '{{.Id}}')"
-    export WEB_IMAGE_DIGEST INSIGHTS_IMAGE_DIGEST
+    from_registry=0
+    live_model=0
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --from-registry) from_registry=1; shift ;;
+        --live-model) live_model=1; shift ;;
+        *) shift ;;
+      esac
+    done
+    if [[ $from_registry -eq 1 ]]; then
+      set_demo_subscription
+      import_digests
+      az_checked acr login --name "$(required_env ACR_NAME)"
+      registry="$("$PYTHON" -c 'import json; print(json.load(open(".local/deploy/digests.json"))["registry"])')"
+      export WEB_IMAGE="${registry}/football-insights-web@${WEB_IMAGE_DIGEST}"
+      export INSIGHTS_IMAGE="${registry}/football-insights-insights@${INSIGHTS_IMAGE_DIGEST}"
+      export INGEST_IMAGE="${registry}/football-insights-ingest@${INGEST_IMAGE_DIGEST}"
+      up_args=(up -d --no-build --pull always)
+    else
+      compose build
+      WEB_IMAGE_DIGEST="$(docker image inspect football-insights-web:local --format '{{.Id}}')"
+      INSIGHTS_IMAGE_DIGEST="$(docker image inspect football-insights-insights:local --format '{{.Id}}')"
+      export WEB_IMAGE_DIGEST INSIGHTS_IMAGE_DIGEST
+      up_args=(up -d)
+    fi
     extra=()
-    if [[ "${1:-}" == "--live-model" ]]; then
+    if [[ $live_model -eq 1 ]]; then
       [[ -n "${FOUNDRY_PROJECT_ENDPOINT:-}" ]] || { echo "demo up --live-model needs FOUNDRY_PROJECT_ENDPOINT in .env" >&2; exit 1; }
       update_token_file
       start_token_refresh
       extra=(-f "$ROOT/demo/docker/compose.live.yaml")
     fi
-    compose "${extra[@]}" up -d
+    compose "${extra[@]}" "${up_args[@]}"
     wait_http "http://127.0.0.1:8080/readyz" 180
     echo "up OK: http://127.0.0.1:8080  (web ${WEB_IMAGE_DIGEST:7:12}, insights ${INSIGHTS_IMAGE_DIGEST:7:12})"
     ;;
@@ -68,21 +90,44 @@ case "$command" in
     "$PYTHON" "$ROOT/demo/scripts/check_no_data.py" --history
     ;;
   install-hook)
-    printf '#!/bin/sh\n# Installed by demo install-hook: refuse commits that would add data.\nexec python demo/scripts/check_no_data.py\n' > "$ROOT/.git/hooks/pre-commit"
+    cat > "$ROOT/.git/hooks/pre-commit" <<'HOOK'
+#!/bin/sh
+# Installed by demo install-hook: refuse commits that would add data.
+for py in .venv/Scripts/python.exe .venv/bin/python python3 python; do
+  if command -v "$py" >/dev/null 2>&1; then exec "$py" demo/scripts/check_no_data.py; fi
+done
+echo "no-data guard: no Python found; run demo bootstrap" >&2
+exit 1
+HOOK
     chmod +x "$ROOT/.git/hooks/pre-commit"
     echo "pre-commit hook installed: $ROOT/.git/hooks/pre-commit"
     ;;
   azure-foundation) azure_foundation ;;
   azure-platform) azure_platform ;;
   upload-data) upload_data ;;
-  build-push) build_push ;;
+  build-push)
+    output=""
+    while [[ $# -gt 0 ]]; do case "$1" in --output|-Output) output="${2:-}"; shift 2 ;; *) shift ;; esac; done
+    build_push "$output"
+    ;;
   aks-deploy) aks_deploy ;;
   aca-deploy) aca_deploy ;;
   ingest-aks) ingest_aks ;;
   ingest-aca) ingest_aca ;;
   smoke) smoke ;;
+  parity) parity ;;
+  load-test)
+    platform="${1:-both}"; shift || true; rps=20; seconds=60
+    while [[ $# -gt 0 ]]; do case "$1" in --rps|-Rps) rps="${2:-20}"; shift 2 ;; --seconds|-Seconds) seconds="${2:-60}"; shift 2 ;; *) shift ;; esac; done
+    load_test "$platform" "$rps" "$seconds"
+    ;;
+  rollout-v2) rollout_v2 ;;
+  rollback) rollback ;;
+  trace) trace_cmd "${1:-}" ;;
+  preflight) preflight ;;
+  reset) reset_demo ;;
   allow-ip) allow_ip ;;
   switch-model) switch_model "${1:-}" ;;
   teardown) teardown "${1:-}" ;;
-  *) sed -n '2,22p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
+  *) sed -n '2,24p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
 esac

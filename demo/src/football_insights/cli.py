@@ -9,6 +9,8 @@ Commands:
   tools         List the tools the insights agent can call.
   eval          Run the evaluation suite against the live model deployments.
   capture-narratives  Save labeled narratives for the offline fallback tier.
+  load-test     Bounded load on deterministic pages (never the model).
+  parity        Compare deterministic card results across web endpoints (AKS and ACA).
 """
 
 from __future__ import annotations
@@ -180,6 +182,34 @@ def _eval(args: argparse.Namespace) -> int:
     return 0
 
 
+def _parity(args: argparse.Namespace) -> int:
+    import httpx
+
+    from . import parity
+
+    try:
+        report = parity.run(args.url)
+    except (ValueError, httpx.HTTPError) as exc:
+        print(f"parity could not run: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(report.as_dict(), indent=2))
+    print("parity OK: identical deterministic results" if report.identical
+          else f"parity FAILED: {len(report.differences)} difference(s)", file=sys.stderr)
+    return 0 if report.identical else 1
+
+
+def _load(args: argparse.Namespace) -> int:
+    from . import loadtest
+
+    try:
+        result = loadtest.run(args.url, args.rps, args.seconds)
+    except ValueError as exc:
+        print(f"load-test refused: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(result.summary(), indent=2))
+    return 0
+
+
 def _capture(args: argparse.Namespace) -> int:
     from datetime import UTC, datetime
 
@@ -247,6 +277,16 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("capture-narratives", help="save labeled narratives for the offline fallback tier")
     p.add_argument("--deployment", help="deployment to use (default: AI_MODEL_DEPLOYMENT)")
     p.set_defaults(func=_capture)
+
+    p = sub.add_parser("load-test", help="bounded load on deterministic pages only (never the model)")
+    p.add_argument("--url", required=True, help="base URL of a web service")
+    p.add_argument("--rps", type=int, default=10, help="requests per second (max 50)")
+    p.add_argument("--seconds", type=int, default=60, help="duration (max 180)")
+    p.set_defaults(func=_load)
+
+    p = sub.add_parser("parity", help="compare deterministic card results across web endpoints")
+    p.add_argument("--url", action="append", required=True, help="base URL of a web service (repeat)")
+    p.set_defaults(func=_parity)
 
     args = parser.parse_args(argv)
     return int(args.func(args))

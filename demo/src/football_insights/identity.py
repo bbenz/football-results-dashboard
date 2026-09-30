@@ -4,9 +4,9 @@
 - ACA: the user-assigned managed identity named by AZURE_CLIENT_ID.
 - Host: the operator's own Azure CLI sign-in.
 - Docker Compose with live models: a short-lived token file written by
-  demo/scripts/compose-up.ps1 -LiveModel, because containers cannot reuse the
-  host's sign-in. The file holds access tokens per scope, refreshed by the
-  script, and nothing ever prints its contents.
+  `demo up -LiveModel` (bash: `demo up --live-model`), because containers cannot
+  reuse the host's sign-in. The file holds access tokens per scope, refreshed by
+  the script, and nothing ever prints its contents.
 
 There is deliberately no API-key or connection-secret path anywhere.
 """
@@ -44,7 +44,7 @@ class FileTokenCredential:
         expires_on = int(entry["expires_on"])
         if expires_on <= time.time() + 60:
             raise ClientAuthenticationError(
-                "token file is expired; run demo/scripts/compose-up.ps1 -LiveModel to refresh it"
+                "token file is expired; run `demo up -LiveModel` (bash: --live-model) to refresh it"
             )
         return str(entry["token"]), expires_on
 

@@ -142,8 +142,9 @@ def create_app(client: httpx.AsyncClient | None = None) -> FastAPI:
         return response.json()
 
     async def badge() -> dict[str, Any]:
+        # Only insights knows which deployment serves answers; web never guesses from its own configuration.
         info: dict[str, Any] = {**runtime.as_dict(), "dataset_version": "unavailable", "dataset_label": "",
-                                "model_deployment": settings.ai_model_deployment, "narrative_mode": "unavailable",
+                                "model_deployment": "unknown", "narrative_mode": "unavailable",
                                 "insights_digest": "", "insights_ok": False}
         try:
             about = await insights_get("/v1/about")
@@ -181,12 +182,25 @@ def create_app(client: httpx.AsyncClient | None = None) -> FastAPI:
         try:
             meta = by_number()
             for item in await insights_get("/v1/cards"):
+                # During a rollout an older web revision can meet a newer insights; it shows the cards it knows.
+                if item["number"] not in meta:
+                    continue
                 result = ToolResult.model_validate(item["result"])
                 cards.append({"card": meta[item["number"]], "result": result.model_dump(mode="json")})
         except (httpx.HTTPError, ValueError, KeyError) as exc:
             error = f"The insights service is not ready yet ({type(exc).__name__})."
         return page(request, "index.html", badge=info, cards=cards, error=error, examples=EXAMPLES,
                     max_chars=settings.question_max_chars)
+
+    @app.get("/api/cards")
+    async def cards_api() -> JSONResponse:
+        """The deterministic insight-card results, for the cross-platform parity check."""
+        try:
+            items = await insights_get("/v1/cards")
+        except (httpx.HTTPError, ValueError) as exc:
+            return JSONResponse({"detail": f"insights unavailable ({type(exc).__name__})"}, status_code=503)
+        versions = sorted({item["result"]["dataset_version"] for item in items})
+        return JSONResponse({"dataset_versions": versions, "cards": items})
 
     async def ask_insights(question: str, deployment: str | None = None) -> tuple[int, dict[str, Any]]:
         payload: dict[str, Any] = {"question": question[: settings.question_max_chars * 2]}

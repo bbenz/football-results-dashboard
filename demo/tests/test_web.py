@@ -23,9 +23,10 @@ def apps(monkeypatch, curated_store):  # type: ignore[no-untyped-def]
     from football_insights.web import app as web_module
 
     insights_module.state.set(curated_store)
-    client = httpx.AsyncClient(transport=httpx.ASGITransport(app=insights_module.app), base_url="http://insights")
+    insights_app = insights_module.create_app()
+    client = httpx.AsyncClient(transport=httpx.ASGITransport(app=insights_app), base_url="http://insights")
     web = web_module.create_app(client=client)
-    yield web, insights_module.app
+    yield web, insights_app
     get_settings.cache_clear()
 
 
@@ -48,6 +49,25 @@ def test_home_page_renders_badge_and_card(apps) -> None:  # type: ignore[no-unty
     assert "About this app" in html and "About this question" in html
     assert "Q3" in html
     assert "Mart Jürisoo" in html and "CC BY 4.0" in html
+
+
+def test_badge_admits_when_insights_is_unreachable(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setenv("PLATFORM_NAME", "AKS")
+    monkeypatch.setenv("AI_MODEL_DEPLOYMENT", "gpt-6-sol")
+    get_settings.cache_clear()
+    from football_insights.web import app as web_module
+
+    def refuse(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("insights down", request=request)
+
+    web = web_module.create_app(client=httpx.AsyncClient(transport=httpx.MockTransport(refuse),
+                                                         base_url="http://insights"))
+    html = get(web, "/").text
+    get_settings.cache_clear()
+    assert "<strong>AKS</strong>" in html
+    assert "data unavailable" in html and "model unknown" in html and "AI narrative: unavailable" in html
+    assert "gpt-6-sol" not in html
+    assert get(web, "/readyz").status_code == 503
 
 
 def test_security_headers(apps) -> None:  # type: ignore[no-untyped-def]

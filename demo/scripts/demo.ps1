@@ -13,6 +13,7 @@
     ingest        Build and publish a curated version into CURATED_DIR (default .local/curated).
     up            Build the three images and start Docker Compose (web on http://127.0.0.1:8080).
                   -LiveModel: also give insights a short-lived Foundry token from your own sign-in.
+                  -FromRegistry: run the digests pushed by build-push instead of building locally.
     down          Stop Docker Compose and delete any local token file.
     logs          Show the last Compose log lines.
     test          Run the no-data guard, ruff, mypy, and the tests.
@@ -21,7 +22,8 @@
 
   Azure commands (not run by local setup)
     azure-foundation, azure-platform, upload-data, build-push, aks-deploy, aca-deploy,
-    ingest-aks, ingest-aca, smoke, allow-ip, switch-model <deployment>, teardown -DryRun
+    ingest-aks, ingest-aca, smoke, parity, load-test [aks|aca|both], rollout-v2,
+    rollback, trace <id>, preflight, reset, allow-ip, switch-model <deployment>, teardown -DryRun
 
   Settings come from environment variables and the repository's .env (see .env.example).
 #>
@@ -29,7 +31,11 @@
 param(
     [Parameter(Position = 0)][string]$Command = 'help',
     [switch]$LiveModel,
+    [switch]$FromRegistry,
     [switch]$DryRun,
+    [int]$Rps = 20,
+    [int]$Seconds = 60,
+    [string]$Output = '',
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest
 )
 $ErrorActionPreference = 'Stop'
@@ -47,17 +53,29 @@ switch ($Command) {
     'verify' { Invoke-Cli verify-data @Rest }
     'ingest' { Invoke-Cli ingest @Rest }
     'up' {
-        Invoke-Checked docker compose @(Get-ComposeArgs) build
-        $env:WEB_IMAGE_DIGEST = (docker image inspect football-insights-web:local --format '{{.Id}}')
-        $env:INSIGHTS_IMAGE_DIGEST = (docker image inspect football-insights-insights:local --format '{{.Id}}')
         $files = @()
+        if ($FromRegistry) {
+            # Run the exact digests pushed by build-push, so the local badge matches AKS and ACA.
+            Set-DemoSubscription
+            $digests = Import-Digests
+            Invoke-AzChecked acr login --name (Get-RequiredEnv 'ACR_NAME')
+            foreach ($t in 'web', 'insights', 'ingest') {
+                [Environment]::SetEnvironmentVariable("$($t.ToUpper())_IMAGE", "$($digests.registry)/football-insights-$t@$($digests.$t)")
+            }
+            $upArgs = @('up', '-d', '--no-build', '--pull', 'always')
+        } else {
+            Invoke-Checked docker compose @(Get-ComposeArgs) build
+            $env:WEB_IMAGE_DIGEST = (docker image inspect football-insights-web:local --format '{{.Id}}')
+            $env:INSIGHTS_IMAGE_DIGEST = (docker image inspect football-insights-insights:local --format '{{.Id}}')
+            $upArgs = @('up', '-d')
+        }
         if ($LiveModel) {
             if (-not $env:FOUNDRY_PROJECT_ENDPOINT) { throw 'demo up -LiveModel needs FOUNDRY_PROJECT_ENDPOINT in .env' }
             Update-TokenFile
             Start-TokenRefresh
             $files = @('-f', (Join-Path $script:Root 'demo/docker/compose.live.yaml'))
         }
-        Invoke-Checked docker compose @(Get-ComposeArgs) @files up -d
+        Invoke-Checked docker compose @(Get-ComposeArgs) @files @upArgs
         Wait-Http 'http://127.0.0.1:8080/readyz' 180
         Write-Host "up OK: http://127.0.0.1:8080  (web $($env:WEB_IMAGE_DIGEST.Substring(7, 12)), insights $($env:INSIGHTS_IMAGE_DIGEST.Substring(7, 12)))"
     }
@@ -83,18 +101,34 @@ switch ($Command) {
     }
     'install-hook' {
         $hook = Join-Path $script:Root '.git/hooks/pre-commit'
-        [IO.File]::WriteAllText($hook, "#!/bin/sh`n# Installed by demo install-hook: refuse commits that would add data.`nexec python demo/scripts/check_no_data.py`n")
+        $lines = @(
+            '#!/bin/sh',
+            '# Installed by demo install-hook: refuse commits that would add data.',
+            'for py in .venv/Scripts/python.exe .venv/bin/python python3 python; do',
+            '  if command -v "$py" >/dev/null 2>&1; then exec "$py" demo/scripts/check_no_data.py; fi',
+            'done',
+            'echo "no-data guard: no Python found; run demo bootstrap" >&2',
+            'exit 1'
+        )
+        [IO.File]::WriteAllText($hook, ($lines -join "`n") + "`n")
         Write-Host "pre-commit hook installed: $hook"
     }
     'azure-foundation' { Invoke-AzureFoundation }
     'azure-platform' { Invoke-AzurePlatform }
     'upload-data' { Invoke-UploadData }
-    'build-push' { Invoke-BuildPush }
+    'build-push' { Invoke-BuildPush -Output $Output }
     'aks-deploy' { Invoke-AksDeploy }
     'aca-deploy' { Invoke-AcaDeploy }
     'ingest-aks' { Invoke-IngestAks }
     'ingest-aca' { Invoke-IngestAca }
     'smoke' { Invoke-Smoke }
+    'parity' { Invoke-Parity }
+    'load-test' { Invoke-LoadTest -Platform $(if ($Rest.Count) { $Rest[0] } else { 'both' }) -Rps $Rps -Seconds $Seconds }
+    'rollout-v2' { Invoke-RolloutV2 }
+    'rollback' { Invoke-Rollback }
+    'trace' { Invoke-Trace -TraceId $(if ($Rest.Count) { $Rest[0] } else { '' }) }
+    'preflight' { Invoke-Preflight }
+    'reset' { Invoke-Reset }
     'allow-ip' { Invoke-AllowIp }
     'switch-model' { Invoke-SwitchModel -Deployment $(if ($Rest.Count) { $Rest[0] } else { '' }) }
     'teardown' { Invoke-Teardown -DryRun:$DryRun }

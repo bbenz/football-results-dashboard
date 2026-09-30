@@ -1,0 +1,17 @@
+using './platform.bicep'
+
+param location = readEnvironmentVariable('AZURE_LOCATION')
+param projectTag = readEnvironmentVariable('PROJECT_TAG')
+param eventDateTag = readEnvironmentVariable('EVENT_DATE')
+param teardownDateTag = readEnvironmentVariable('TEARDOWN_DATE')
+param acrName = readEnvironmentVariable('ACR_NAME')
+param storageAccountName = readEnvironmentVariable('STORAGE_ACCOUNT_NAME')
+param foundryAccountName = readEnvironmentVariable('FOUNDRY_RESOURCE_NAME')
+param appInsightsName = readEnvironmentVariable('APPINSIGHTS_NAME')
+param operatorPrincipalId = readEnvironmentVariable('OPERATOR_PRINCIPAL_ID')
+param aksWebIdentityName = readEnvironmentVariable('AKS_WEB_IDENTITY_NAME')
+param aksInsightsIdentityName = readEnvironmentVariable('AKS_INSIGHTS_IDENTITY_NAME')
+param aksIngestIdentityName = readEnvironmentVariable('AKS_INGEST_IDENTITY_NAME')
+param acaWebIdentityName = readEnvironmentVariable('ACA_WEB_IDENTITY_NAME')
+param acaInsightsIdentityName = readEnvironmentVariable('ACA_INSIGHTS_IDENTITY_NAME')
+param acaIngestIdentityName = readEnvironmentVariable('ACA_INGEST_IDENTITY_NAME')

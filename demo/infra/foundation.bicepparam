@@ -1,0 +1,14 @@
+using './foundation.bicep'
+
+param location = readEnvironmentVariable('AZURE_LOCATION')
+param projectTag = readEnvironmentVariable('PROJECT_TAG')
+param eventDateTag = readEnvironmentVariable('EVENT_DATE')
+param teardownDateTag = readEnvironmentVariable('TEARDOWN_DATE')
+param foundryAccountName = readEnvironmentVariable('FOUNDRY_RESOURCE_NAME')
+param foundryProjectName = readEnvironmentVariable('FOUNDRY_PROJECT_NAME')
+param logAnalyticsName = readEnvironmentVariable('LOG_ANALYTICS_NAME')
+param appInsightsName = readEnvironmentVariable('APPINSIGHTS_NAME')
+param operatorPrincipalId = readEnvironmentVariable('OPERATOR_PRINCIPAL_ID')
+param budgetAmount = int(readEnvironmentVariable('BUDGET_AMOUNT'))
+param budgetContactEmail = readEnvironmentVariable('BUDGET_CONTACT_EMAIL')
+param budgetStartDate = readEnvironmentVariable('BUDGET_START_DATE')

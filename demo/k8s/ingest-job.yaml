@@ -1,0 +1,49 @@
+# The ingest Job, applied separately from the app manifest: a Job's pod template is immutable, so each run
+# deletes the previous Job and applies this one. Rendered and run by demo aks-deploy and demo ingest-aks.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ingest
+  namespace: football
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: ingest
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: ingest
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: ingest
+          image: "${ACR_LOGIN_SERVER}/football-insights-ingest@${INGEST_IMAGE_DIGEST}"
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "football_insights", "ingest", "--source", "blob"]
+          env:
+            - { name: PLATFORM_NAME, value: AKS }
+            - { name: PLATFORM_REGION, value: "${AZURE_LOCATION}" }
+            - { name: IMAGE_DIGEST, value: "${INGEST_IMAGE_DIGEST}" }
+            - { name: OTEL_SERVICE_NAME, value: ingest }
+            - { name: AZURE_CLIENT_ID, value: "${AKS_INGEST_CLIENT_ID}" }
+            - { name: APPLICATIONINSIGHTS_CONNECTION_STRING, value: "${APPLICATIONINSIGHTS_CONNECTION_STRING}" }
+            - { name: CURATED_SOURCE, value: blob }
+            - { name: STORAGE_ACCOUNT_URL, value: "${STORAGE_ACCOUNT_URL}" }
+            - { name: RAW_CONTAINER, value: raw }
+            - { name: CURATED_CONTAINER, value: curated }
+          resources:
+            requests: { cpu: 500m, memory: 1Gi }
+            limits: { cpu: 500m, memory: 1Gi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: {}

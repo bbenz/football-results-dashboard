@@ -1,7 +1,7 @@
 # Local run of the three images. From the repository root:
 #   docker compose -f demo/docker/compose.yaml up --build
-# or use demo/scripts/fi.ps1 up, which also records the image digests for the badge
-# and passes the data folder as FOOTBALL_DATA_DIR_HOST (an absolute path).
+# or use `demo up` (demo/scripts/demo.ps1 or demo.sh), which also records the image digests
+# for the badge and passes the data folder as FOOTBALL_DATA_DIR_HOST (an absolute path).
 #
 # The raw data folder is mounted read-only; ingest writes the curated store to a
 # named volume; only web publishes a port, and only on this machine's loopback.
@@ -10,7 +10,7 @@ name: football-insights
 services:
   ingest:
     build: { context: .., dockerfile: docker/Dockerfile, target: ingest }
-    image: football-insights-ingest:local
+    image: ${INGEST_IMAGE:-football-insights-ingest:local}
     environment:
       FOOTBALL_DATA_DIR: /data
       CURATED_DIR: /curated
@@ -23,7 +23,7 @@ services:
 
   insights:
     build: { context: .., dockerfile: docker/Dockerfile, target: insights }
-    image: football-insights-insights:local
+    image: ${INSIGHTS_IMAGE:-football-insights-insights:local}
     depends_on:
       ingest: { condition: service_completed_successfully }
     environment:
@@ -44,7 +44,7 @@ services:
 
   web:
     build: { context: .., dockerfile: docker/Dockerfile, target: web }
-    image: football-insights-web:local
+    image: ${WEB_IMAGE:-football-insights-web:local}
     depends_on:
       insights: { condition: service_healthy }
     environment:
@@ -53,7 +53,6 @@ services:
       IMAGE_DIGEST: ${WEB_IMAGE_DIGEST:-}
       OTEL_SERVICE_NAME: web
       LOCAL_TRACE_DIR: /traces
-      AI_MODEL_DEPLOYMENT: ${AI_MODEL_DEPLOYMENT:-gpt-6-astra}
     volumes:
       - ../../.local/traces:/traces
     ports: ["127.0.0.1:8080:8080"]

@@ -1,9 +1,11 @@
 """ingest: verify the raw files, build the curated store, publish a version.
 
 The curated version ID is derived from the input checksums, this module's
-version, and the reference data, so re-running ingest on the same inputs
-reproduces the same version and the same file checksums on any platform. Files
-are written first; the manifest last; the ACTIVE pointer after that.
+version, the reference data, and the development-indicator shortlist, so
+re-running ingest on the same inputs reproduces the same version and the same
+file checksums on any platform. Change INGEST_VERSION whenever you change how
+ingest builds its tables, so the new output gets a new version. Files are
+written first; the manifest last; the ACTIVE pointer after that.
 """
 
 from __future__ import annotations
@@ -62,6 +64,7 @@ def version_id(report: VerifyReport, reference: Reference) -> str:
     for path in sorted(report.files):
         digest.update(f"{path}={report.files[path].sha256}\n".encode())
     digest.update(reference.digest.encode())
+    digest.update(json.dumps(sorted(WDI_INDICATORS)).encode())
     return "cv-" + digest.hexdigest()[:12]
 
 

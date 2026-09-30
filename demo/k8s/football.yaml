@@ -1,0 +1,269 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: football
+  labels:
+    name: football
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: web
+  namespace: football
+  annotations:
+    azure.workload.identity/client-id: "${AKS_WEB_CLIENT_ID}"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: insights
+  namespace: football
+  annotations:
+    azure.workload.identity/client-id: "${AKS_INSIGHTS_CLIENT_ID}"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ingest
+  namespace: football
+  annotations:
+    azure.workload.identity/client-id: "${AKS_INGEST_CLIENT_ID}"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: insights
+  namespace: football
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: insights }
+  template:
+    metadata:
+      labels:
+        app: insights
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: insights
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: insights
+          image: "${ACR_LOGIN_SERVER}/football-insights-insights@${INSIGHTS_IMAGE_DIGEST}"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8081
+          env:
+            - { name: PLATFORM_NAME, value: AKS }
+            - { name: PLATFORM_REGION, value: "${AZURE_LOCATION}" }
+            - { name: IMAGE_DIGEST, value: "${INSIGHTS_IMAGE_DIGEST}" }
+            - { name: OTEL_SERVICE_NAME, value: insights }
+            - { name: AZURE_CLIENT_ID, value: "${AKS_INSIGHTS_CLIENT_ID}" }
+            - { name: APPLICATIONINSIGHTS_CONNECTION_STRING, value: "${APPLICATIONINSIGHTS_CONNECTION_STRING}" }
+            - { name: CURATED_SOURCE, value: blob }
+            - { name: STORAGE_ACCOUNT_URL, value: "${STORAGE_ACCOUNT_URL}" }
+            - { name: CURATED_CONTAINER, value: curated }
+            - { name: FOUNDRY_PROJECT_ENDPOINT, value: "${FOUNDRY_PROJECT_ENDPOINT}" }
+            - { name: AI_MODEL_DEPLOYMENT, value: "${AI_MODEL_DEPLOYMENT}" }
+            - { name: AI_ALLOWED_DEPLOYMENTS, value: "${AI_ALLOWED_DEPLOYMENTS}" }
+          resources:
+            requests: { cpu: 500m, memory: 1Gi }
+            limits: { cpu: 500m, memory: 1Gi }
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8081 }
+            periodSeconds: 15
+          readinessProbe:
+            httpGet: { path: /readyz, port: 8081 }
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: football
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: web }
+  template:
+    metadata:
+      labels:
+        app: web
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: web
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: web
+          image: "${ACR_LOGIN_SERVER}/football-insights-web@${WEB_IMAGE_DIGEST}"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - { name: PLATFORM_NAME, value: AKS }
+            - { name: PLATFORM_REGION, value: "${AZURE_LOCATION}" }
+            - { name: IMAGE_DIGEST, value: "${WEB_IMAGE_DIGEST}" }
+            - { name: OTEL_SERVICE_NAME, value: web }
+            - { name: AZURE_CLIENT_ID, value: "${AKS_WEB_CLIENT_ID}" }
+            - { name: APPLICATIONINSIGHTS_CONNECTION_STRING, value: "${APPLICATIONINSIGHTS_CONNECTION_STRING}" }
+            - { name: INSIGHTS_URL, value: http://insights:8081 }
+            # Per-client page limit sized for the bounded load test (at most 50 requests per second from one
+            # address). Model-backed questions keep the app's default limit of 6 per minute.
+            - { name: WEB_RATE_LIMIT_PER_MINUTE, value: "3600" }
+          resources:
+            requests: { cpu: 500m, memory: 1Gi }
+            limits: { cpu: 500m, memory: 1Gi }
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            periodSeconds: 15
+          readinessProbe:
+            httpGet: { path: /readyz, port: 8080 }
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: insights
+  namespace: football
+spec:
+  type: ClusterIP
+  selector: { app: insights }
+  ports:
+    - { name: http, port: 8081, targetPort: 8081 }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: football
+spec:
+  type: ClusterIP
+  selector: { app: web }
+  ports:
+    - { name: http, port: 8080, targetPort: 8080 }
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: football-web
+  namespace: football
+spec:
+  gatewayClassName: approuting-istio
+  # Gateway API copies infrastructure annotations to the generated LoadBalancer Service. The Azure cloud provider
+  # turns azure-allowed-ip-ranges into network security group rules on the client's real address, so only the
+  # operator's IP reaches the gateway. https://cloud-provider-azure.sigs.k8s.io/topics/loadbalancer/
+  infrastructure:
+    annotations:
+      service.beta.kubernetes.io/azure-allowed-ip-ranges: "${ALLOWED_CIDRS}"
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: Same
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: web
+  namespace: football
+spec:
+  parentRefs:
+    - name: football-web
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: web
+          port: 8080
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: web
+  namespace: football
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: web
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 70 }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: insights
+  namespace: football
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: insights
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 70 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: insights-ingress
+  namespace: football
+spec:
+  podSelector:
+    matchLabels: { app: insights }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app: web }
+      ports:
+        - { protocol: TCP, port: 8081 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: web-ingress
+  namespace: football
+spec:
+  podSelector:
+    matchLabels: { app: web }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - { protocol: TCP, port: 8080 }
