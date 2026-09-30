@@ -95,7 +95,7 @@ def by_number() -> dict[int, Card]:
 VIEW_LABELS: dict[str, str] = {
     "peak": "Peak rating", "career_average": "Career average rating", "time_at_top": "Time at the top",
     "records": "Win rate and points per match", "wins_per_million": "Wins per million people (novelty)",
-    "all": "Leader of every era",
+    "all": "All eras",
     "home_advantage": "Home advantage", "goals_per_match": "Goals per match",
     "strength_spread": "Spread of team strength",
     "goal_timing": "Goal timing and penalties", "strength_by_region": "Strength by World Bank region",
