@@ -12,6 +12,13 @@ This repository is the companion to the Microsoft Reactor livestream **Build AI-
 6. How much, if at all, does hosting a major tournament help a country's chances in the tournament?
 7. Which teams are the most active in playing friendlies and friendly tournaments, and does it help or hurt them?
 
+## Data attribution
+
+- **International football results from 1872 to 2026** by Mart Jürisoo, on [Kaggle](https://www.kaggle.com/datasets/martj42/international-football-results-from-1872-to-2017), CC0: Public Domain.
+- **Global Development Data (1960–2025)** by Yogesh Mishra, on [Kaggle](https://www.kaggle.com/datasets/yogeshm01/global-development-data-19602025), from the World Bank's World Development Indicators, CC BY 4.0. This app reshapes and filters the data.
+
+The data is not redistributed here. See [data/README.md](data/README.md) for versions and licenses.
+
 ## How it works
 
 - **Deterministic analytics own every number.** Tested Python and SQL over a curated copy of the data compute every figure, chart, and table.
@@ -82,9 +89,3 @@ Which platform should you choose? [docs/AKS-VS-ACA.md](docs/AKS-VS-ACA.md) compa
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), and [SECURITY.md](SECURITY.md). The code is released under the [MIT License](LICENSE).
 
-## Data attribution
-
-- **International football results from 1872 to 2026** by Mart Jürisoo, on [Kaggle](https://www.kaggle.com/datasets/martj42/international-football-results-from-1872-to-2017), CC0: Public Domain.
-- **Global Development Data (1960–2025)** by Yogesh Mishra, on [Kaggle](https://www.kaggle.com/datasets/yogeshm01/global-development-data-19602025), from the World Bank's World Development Indicators, CC BY 4.0. This app reshapes and filters the data.
-
-The data is not redistributed here. See [data/README.md](data/README.md) for versions and licenses.
